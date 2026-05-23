@@ -1,0 +1,10 @@
+const handleRegister = (event) => {
+  event.preventDefault();
+  if (username && password) {
+    const hashedPassword = hashPassword(password);
+    setStoredCredentials((prevCredentials) => ({ ...prevCredentials, [username]: hashedPassword }));
+    setIsLoggedIn(true);
+  } else {
+    setError('الرجاء إدخال اسم المستخدم وكلمة المرور');
+  }
+};
