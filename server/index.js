@@ -232,6 +232,46 @@ app.post('/api/stop', async (req, res) => {
   }
 });
 
+app.post('/api/search', async (req, res) => {
+  try {
+    const { query, dirPath } = req.body;
+    if (!query || !dirPath) return res.json({ success: true, results: [] });
+
+    const results = [];
+
+    function searchDir(dir) {
+      const items = fs.readdirSync(dir, { withFileTypes: true });
+      for (const item of items) {
+        if (['node_modules', '.git', '.next', 'dist', 'vendor'].includes(item.name)) continue;
+        const fullPath = pathModule.join(dir, item.name);
+        if (item.isDirectory()) {
+          searchDir(fullPath);
+        } else {
+          try {
+            const content = fs.readFileSync(fullPath, 'utf8');
+            const lines = content.split('\n');
+            lines.forEach((line, i) => {
+              if (line.toLowerCase().includes(query.toLowerCase())) {
+                results.push({
+                  file: item.name,
+                  path: fullPath,
+                  line: i + 1,
+                  text: line.trim(),
+                });
+              }
+            });
+          } catch { }
+        }
+      }
+    }
+
+    searchDir(pathModule.resolve(dirPath));
+    res.json({ success: true, results: results.slice(0, 100) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);
 });

@@ -140,6 +140,9 @@ export default function App() {
   const [projectName, setProjectName] = useState('أخطبوط');
   const [isRunning, setIsRunning] = useState(false);
   const [runProcess, setRunProcess] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const t = THEMES[theme];
@@ -241,6 +244,21 @@ export default function App() {
       setIsRunning(false);
       setRunProcess(null);
     }
+  }
+
+  async function doSearch(q) {
+    if (!q.trim() || !currentDir) return;
+    setSearching(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, dirPath: currentDir }),
+      });
+      const data = await res.json();
+      if (data.success) setSearchResults(data.results);
+    } catch { }
+    setSearching(false);
   }
 
   function activateLeg(id, task) {
@@ -402,6 +420,57 @@ export default function App() {
               }
             </div>
           )}
+          {activeActivity === 'search' && (
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
+                <input
+                  style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none' }}
+                  placeholder="ابحث في الملفات..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') doSearch(searchQuery); }}
+                  dir="auto"
+                />
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1 }}>
+                {searching && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري البحث...</p>}
+                {searchResults.length === 0 && !searching && searchQuery && (
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد نتائج</p>
+                )}
+                {(() => {
+                  // تجميع النتائج حسب الملف
+                  const grouped = searchResults.reduce((acc, r) => {
+                    if (!acc[r.file]) acc[r.file] = { path: r.path, lines: [] };
+                    acc[r.file].lines.push(r);
+                    return acc;
+                  }, {});
+
+                  return Object.entries(grouped).map(([file, data]) => (
+                    <div key={file} style={{ marginBottom: 4 }}>
+                      {/* اسم الملف */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: t.border + '33', position: 'sticky', top: 0 }}>
+                        {(() => { const { icon, color } = getFileIcon(file); return <i className={`codicon ${icon}`} style={{ color, fontSize: 12 }} />; })()}
+                        <span style={{ fontSize: 11, color: t.accent, fontWeight: 500 }}>{file}</span>
+                        <span style={{ fontSize: 10, color: t.textMuted, marginRight: 'auto' }}>{data.lines.length} نتيجة</span>
+                      </div>
+                      {/* السطور */}
+                      {data.lines.map((r, i) => (
+                        <div key={i}
+                          style={{ padding: '4px 10px 4px 20px', cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'flex-start' }}
+                          onClick={() => onFileClick({ name: r.file, path: r.path, type: 'file' })}
+                          onMouseEnter={e => e.currentTarget.style.background = t.accent + '11'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace', minWidth: 28, textAlign: 'left', flexShrink: 0 }}>{r.line}</span>
+                          <span style={{ fontSize: 11, color: t.textMuted, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </div>
+          )}
           {activeActivity === 'git' && (
             <div style={{ padding: 12, flex: 1 }}>
               <p style={{ fontSize: 12, color: t.textMuted }}>لا توجد تغييرات</p>
@@ -423,13 +492,27 @@ export default function App() {
           <div style={{ display: "flex", background: t.sidebar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, overflowX: "auto" }}>
             {files.slice(0, 8).map(f => {
               const { icon, color } = getFileIcon(f.name);
+              const isActive = f.name === activeFile;
               return (
                 <div key={f.name}
-                  style={{ padding: "6px 14px", fontSize: 12, cursor: "pointer", color: f.name === activeFile ? t.text : t.textMuted, borderBottom: f.name === activeFile ? `2px solid ${t.accent}` : `2px solid transparent`, background: f.name === activeFile ? t.bg : 'transparent', whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ padding: "6px 14px", fontSize: 12, cursor: "pointer", color: isActive ? t.text : t.textMuted, borderBottom: isActive ? `2px solid ${t.accent}` : `2px solid transparent`, background: isActive ? t.bg : 'transparent', whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 10 }}
                   onClick={() => setActiveFile(f.name)}
                 >
                   <i className={`codicon ${icon}`} style={{ color, fontSize: 12 }} />
                   {f.name}
+                  <span
+                    style={{ fontSize: 14, color: t.textMuted, marginRight: 2, lineHeight: 1, padding: '0 2px', borderRadius: 3, opacity: isActive ? 1 : 0 }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      const remaining = files.filter(file => file.name !== f.name);
+                      setFiles(remaining);
+                      if (activeFile === f.name && remaining.length > 0) {
+                        setActiveFile(remaining[remaining.length - 1].name);
+                      }
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = t.border; e.currentTarget.style.opacity = 1; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.opacity = isActive ? '1' : '0'; }}
+                  >×</span>
                 </div>
               );
             })}
