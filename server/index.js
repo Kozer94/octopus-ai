@@ -126,13 +126,33 @@ app.post('/api/files/list', async (req, res) => {
   try {
     const { dirPath } = req.body;
     const fullPath = pathModule.resolve(dirPath);
-    const items = fs.readdirSync(fullPath, { withFileTypes: true });
-    const result = items.map(item => ({
-      name: item.name,
-      type: item.isDirectory() ? 'dir' : 'file',
-      path: pathModule.join(fullPath, item.name)
-    }));
-    res.json({ success: true, items: result });
+
+    function readDir(dir, base = '') {
+      const items = fs.readdirSync(dir, { withFileTypes: true });
+      let dirs = [];
+      let files = [];
+
+      for (const item of items) {
+        // تجاهل المجلدات الثقيلة
+        if (['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', 'vendor'].includes(item.name)) continue;
+        if (item.name === '.env' || item.name.endsWith('.env')) continue;
+        const fullItemPath = pathModule.join(dir, item.name);
+        if (item.isDirectory()) {
+          dirs.push({ name: item.name, type: 'dir', path: fullItemPath, children: readDir(fullItemPath) });
+        } else {
+          files.push({ name: item.name, type: 'file', path: fullItemPath });
+        }
+      }
+
+      // مجلدات أولاً ثم ملفات، كل مجموعة مرتبة أبجدياً
+      dirs.sort((a, b) => a.name.localeCompare(b.name));
+      files.sort((a, b) => a.name.localeCompare(b.name));
+
+      return [...dirs, ...files];
+    }
+
+    const items = readDir(fullPath);
+    res.json({ success: true, items });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
