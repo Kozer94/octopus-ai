@@ -1,0 +1,21 @@
+{
+  "name": "octopus-ai",
+  "version": "1.0.0",
+  "description": "🐙 Octopus AI - Desktop App",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently \"cd client && npm run dev\" \"wait-on http://localhost:5173 && electron .\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.3.3",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
