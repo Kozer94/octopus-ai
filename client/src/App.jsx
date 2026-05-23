@@ -162,8 +162,12 @@ export default function App() {
   ]);
   const [terminalInput, setTerminalInput] = useState('');
   const [currentDir, setCurrentDir] = useState('');
+  const [sidebarWidth, setSidebarWidth] = useState(200);
+  const [terminalHeight, setTerminalHeight] = useState(200);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const terminalRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -229,6 +233,38 @@ export default function App() {
     } catch {
       setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ تعذّر تشغيل الأمر' }]);
     }
+  }
+
+  function startSidebarResize(e) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebarWidth;
+    function onMove(e) {
+      const newWidth = Math.max(120, Math.min(400, startWidth + e.clientX - startX));
+      setSidebarWidth(newWidth);
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  function startTerminalResize(e) {
+    e.preventDefault();
+    const startY = e.clientY;
+    const startHeight = terminalHeight;
+    function onMove(e) {
+      const newHeight = Math.max(80, Math.min(500, startHeight - (e.clientY - startY)));
+      setTerminalHeight(newHeight);
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
   }
 
   function activateLeg(id, task) {
@@ -377,7 +413,7 @@ export default function App() {
 
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={s.main}>
-        <div style={s.sidebar}>
+        <div ref={sidebarRef} style={{ ...s.sidebar, width: sidebarWidth }}>
           <div style={s.sidebarHeader}>
             <span style={s.sidebarLabel}>الملفات</span>
             <button style={s.addBtn} onClick={() => {
@@ -418,6 +454,12 @@ export default function App() {
             }
           </div>
         </div>
+        <div
+          style={{ width: 4, cursor: 'col-resize', background: 'transparent', flexShrink: 0, transition: 'background 0.1s' }}
+          onMouseDown={startSidebarResize}
+          onMouseEnter={e => e.currentTarget.style.background = '#58a6ff'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        />
 
         <div style={s.editorPane}>
           <div style={s.tabs}>
@@ -488,7 +530,13 @@ export default function App() {
       </div>
 
       {terminalOpen && (
-        <div style={s.terminal}>
+        <div ref={terminalRef} style={{ ...s.terminal, height: terminalHeight }}>
+          <div
+            style={{ height: 4, cursor: 'row-resize', background: 'transparent', flexShrink: 0 }}
+            onMouseDown={startTerminalResize}
+            onMouseEnter={e => e.currentTarget.style.background = '#58a6ff'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          />
           <div style={s.terminalHeader}>
             <span style={{ fontSize: 12, color: '#7dd3fc' }}>⚡ Terminal</span>
             <span style={{ fontSize: 11, color: '#6e7681', flex: 1, marginRight: 8 }}>{currentDir}</span>
@@ -546,7 +594,7 @@ const s = {
   headerSub: { fontSize: 12, color: "#6e7681" },
   headerBtn: { background: "#21262d", border: "0.5px solid #30363d", borderRadius: 6, color: "#8b949e", padding: "4px 10px", fontSize: 12, cursor: "pointer" },
   main: { display: "flex", flex: 1, overflow: "hidden" },
-  sidebar: { width: 200, background: "#161b22", borderLeft: "0.5px solid #30363d", display: "flex", flexDirection: "column", flexShrink: 0 },
+  sidebar: { background: "#161b22", borderLeft: "0.5px solid #30363d", display: "flex", flexDirection: "column", flexShrink: 0 },
   sidebarHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: "0.5px solid #30363d", flexShrink: 0 },
   sidebarLabel: { fontSize: 11, color: "#6e7681", textTransform: "uppercase", letterSpacing: "0.5px" },
   addBtn: { background: "transparent", border: "none", color: "#6e7681", cursor: "pointer", fontSize: 16 },
@@ -562,7 +610,7 @@ const s = {
   progressBar: { background: "#21262d", borderRadius: 3, height: 3 },
   progressFill: (progress, status) => ({ background: status === "done" ? "#3fb950" : "#f0883e", width: `${progress}%`, height: "100%", borderRadius: 3, transition: "width 0.2s ease" }),
   chatArea: { flex: 1, overflowY: "auto", padding: 10, borderTop: "0.5px solid #30363d" },
-  terminal: { height: 200, background: '#0d1117', borderTop: '0.5px solid #30363d', display: 'flex', flexDirection: 'column', flexShrink: 0 },
+  terminal: { background: '#0d1117', borderTop: '0.5px solid #30363d', display: 'flex', flexDirection: 'column', flexShrink: 0 },
   terminalHeader: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '0.5px solid #30363d', background: '#161b22' },
   terminalBody: { flex: 1, overflowY: 'auto', padding: '8px 12px' },
   terminalInput: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderTop: '0.5px solid #30363d' },
