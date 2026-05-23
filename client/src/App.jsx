@@ -143,6 +143,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [gitFiles, setGitFiles] = useState([]);
+  const [commitMsg, setCommitMsg] = useState('');
+  const [gitLoading, setGitLoading] = useState(false);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const t = THEMES[theme];
@@ -259,6 +262,35 @@ export default function App() {
       if (data.success) setSearchResults(data.results);
     } catch { }
     setSearching(false);
+  }
+
+  async function loadGitStatus() {
+    if (!currentDir) return;
+    setGitLoading(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/git/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd: currentDir }),
+      });
+      const data = await res.json();
+      if (data.success) setGitFiles(data.files);
+    } catch { }
+    setGitLoading(false);
+  }
+
+  async function doCommit() {
+    if (!commitMsg.trim()) return;
+    const res = await fetch(`${BACKEND}/api/git/commit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd: currentDir, message: commitMsg }),
+    });
+    const data = await res.json();
+    setTerminalHistory(prev => [...prev, { type: data.success ? 'output' : 'error', text: data.output }]);
+    setTerminalOpen(true);
+    setCommitMsg('');
+    loadGitStatus();
   }
 
   function activateLeg(id, task) {
@@ -472,8 +504,48 @@ export default function App() {
             </div>
           )}
           {activeActivity === 'git' && (
-            <div style={{ padding: 12, flex: 1 }}>
-              <p style={{ fontSize: 12, color: t.textMuted }}>لا توجد تغييرات</p>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
+                <button
+                  style={{ width: '100%', background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '5px 10px', fontSize: 12, cursor: 'pointer', marginBottom: 6 }}
+                  onClick={loadGitStatus}
+                >
+                  <i className="codicon codicon-refresh" style={{ fontSize: 12 }} /> تحديث
+                </button>
+                <input
+                  style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none', marginBottom: 6 }}
+                  placeholder="رسالة الـ commit..."
+                  value={commitMsg}
+                  onChange={e => setCommitMsg(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') doCommit(); }}
+                  dir="auto"
+                />
+                <button
+                  style={{ width: '100%', background: gitFiles.length > 0 ? '#238636' : t.border, border: 'none', borderRadius: 6, color: '#fff', padding: '5px 10px', fontSize: 12, cursor: 'pointer' }}
+                  onClick={doCommit}
+                  disabled={gitFiles.length === 0}
+                >
+                  <i className="codicon codicon-check" style={{ fontSize: 12 }} /> Commit ({gitFiles.length})
+                </button>
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+                {gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري التحميل...</p>}
+                {gitFiles.length === 0 && !gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد تغييرات</p>}
+                {gitFiles.map((f, i) => (
+                  <div key={i}
+                    style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = t.border + '44'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: 11, fontFamily: 'monospace', color: f.status === 'M' ? '#f0883e' : f.status === 'A' ? '#3fb950' : f.status === 'D' ? '#ff7b72' : t.accent, minWidth: 16 }}>
+                      {f.status}
+                    </span>
+                    <span style={{ fontSize: 11, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {f.file}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

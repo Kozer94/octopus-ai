@@ -272,6 +272,42 @@ app.post('/api/search', async (req, res) => {
   }
 });
 
+// Git status
+app.post('/api/git/status', async (req, res) => {
+  try {
+    const { cwd } = req.body;
+    exec('git status --porcelain', { cwd }, (error, stdout) => {
+      if (error) return res.json({ success: false, error: 'ليس مشروع Git' });
+      const files = stdout.trim().split('\n').filter(Boolean).map(line => ({
+        status: line.slice(0, 2).trim(),
+        file: line.slice(2).trim(),
+      }));
+      res.json({ success: true, files });
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Git commit
+app.post('/api/git/commit', async (req, res) => {
+  try {
+    const { cwd, message } = req.body;
+    const safeMessage = String(message || '').replace(/"/g, '\\"');
+    exec(`git add . && git commit -m "${safeMessage}"`, { cwd }, (error, stdout, stderr) => {
+      res.json({ success: !error, output: stdout || stderr || error?.message });
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Git diff
+app.post('/api/git/diff', async (req, res) => {
+  try {
+    const { cwd, file } = req.body;
+    exec(`git diff ${file}`, { cwd }, (error, stdout) => {
+      res.json({ success: true, diff: stdout });
+    });
+  } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);
 });
