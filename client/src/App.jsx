@@ -146,6 +146,8 @@ export default function App() {
   const [gitFiles, setGitFiles] = useState([]);
   const [commitMsg, setCommitMsg] = useState('');
   const [gitLoading, setGitLoading] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [projectsOpen, setProjectsOpen] = useState(false);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const t = THEMES[theme];
@@ -187,11 +189,34 @@ export default function App() {
     const folderPath = await window.octopus.openFolder();
     if (!folderPath) return;
     const name = folderPath.split('\\').pop() || folderPath.split('/').pop();
+
+    // أضف للمشاريع المحفوظة
+    setProjects(prev => {
+      const exists = prev.find(p => p.path === folderPath);
+      if (exists) return prev;
+      return [...prev, { name, path: folderPath }];
+    });
+
     setProjectName(name);
     setCurrentDir(folderPath);
     const res = await fetch(`${BACKEND}/api/files/list`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dirPath: folderPath }) });
     const data = await res.json();
-    if (data.success) { setFileTree(data.items); setFiles([]); }
+    if (data.success) { setFileTree(data.items); setFiles([]); setGitFiles([]); }
+  }
+
+  async function switchProject(project) {
+    setProjectName(project.name);
+    setCurrentDir(project.path);
+    setFiles([]);
+    setGitFiles([]);
+    setProjectsOpen(false);
+    const res = await fetch(`${BACKEND}/api/files/list`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dirPath: project.path }),
+    });
+    const data = await res.json();
+    if (data.success) setFileTree(data.items);
   }
 
   async function runCommand(cmd) {
@@ -369,7 +394,46 @@ export default function App() {
       <div style={{ display: "flex", alignItems: "center", padding: "0 12px", height: 35, background: t.activityBar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, gap: 10 }}>
         <span style={{ fontSize: 18 }}>🐙</span>
         <span style={{ fontSize: 13, fontWeight: 500, color: t.accent }}>أخطبوط</span>
-        <span style={{ fontSize: 11, color: t.textMuted }}>— {projectName}</span>
+        <div style={{ position: 'relative' }}>
+          <span
+            style={{ fontSize: 11, color: t.textMuted, cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
+            onClick={() => setProjectsOpen(p => !p)}
+            onMouseEnter={e => e.currentTarget.style.background = t.border}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            — {projectName} ▾
+          </span>
+          {projectsOpen && projects.length > 0 && (
+            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: 4, zIndex: 100, minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+              <p style={{ fontSize: 10, color: t.textMuted, padding: '4px 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>المشاريع الأخيرة</p>
+              {projects.map((p, i) => (
+                <div key={i}
+                  onClick={() => switchProject(p)}
+                  style={{ padding: '6px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: p.path === currentDir ? t.accent : t.text, background: p.path === currentDir ? t.accent + '22' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
+                  onMouseEnter={e => e.currentTarget.style.background = t.border}
+                  onMouseLeave={e => e.currentTarget.style.background = p.path === currentDir ? t.accent + '22' : 'transparent'}
+                >
+                  <i className="codicon codicon-folder" style={{ color: t.accent, fontSize: 13 }} />
+                  <div>
+                    <p style={{ margin: 0, fontSize: 12, color: p.path === currentDir ? t.accent : t.text }}>{p.name}</p>
+                    <p style={{ margin: 0, fontSize: 10, color: t.textMuted }}>{p.path.slice(0, 35)}...</p>
+                  </div>
+                </div>
+              ))}
+              <div style={{ borderTop: `0.5px solid ${t.border}`, marginTop: 4, paddingTop: 4 }}>
+                <div
+                  onClick={openFolder}
+                  style={{ padding: '6px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: t.accent, display: 'flex', alignItems: 'center', gap: 8 }}
+                  onMouseEnter={e => e.currentTarget.style.background = t.border}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <i className="codicon codicon-folder-opened" style={{ fontSize: 13 }} />
+                  فتح مجلد جديد
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: loading ? "#f0883e" : "#3fb950" }} />
