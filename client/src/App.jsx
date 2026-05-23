@@ -163,7 +163,7 @@ export default function App() {
   const [terminalInput, setTerminalInput] = useState('');
   const [currentDir, setCurrentDir] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(200);
-  const [terminalHeight, setTerminalHeight] = useState(200);
+  const [terminalHeight, setTerminalHeight] = useState(180);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -240,7 +240,7 @@ export default function App() {
     const startX = e.clientX;
     const startWidth = sidebarWidth;
     function onMove(e) {
-      const newWidth = Math.max(120, Math.min(400, startWidth + e.clientX - startX));
+      const newWidth = Math.max(150, Math.min(300, startWidth + e.clientX - startX));
       setSidebarWidth(newWidth);
     }
     function onUp() {
@@ -256,7 +256,7 @@ export default function App() {
     const startY = e.clientY;
     const startHeight = terminalHeight;
     function onMove(e) {
-      const newHeight = Math.max(80, Math.min(500, startHeight - (e.clientY - startY)));
+      const newHeight = Math.max(80, Math.min(350, startHeight - (e.clientY - startY)));
       setTerminalHeight(newHeight);
     }
     function onUp() {
@@ -411,7 +411,6 @@ export default function App() {
         <button style={s.headerBtn} onClick={reset}>🗑 مسح</button>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={s.main}>
         <div ref={sidebarRef} style={{ ...s.sidebar, width: sidebarWidth }}>
           <div style={s.sidebarHeader}>
@@ -469,7 +468,7 @@ export default function App() {
               </div>
             ))}
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
             <Editor
               height="100%"
               language={
@@ -493,6 +492,44 @@ export default function App() {
               }}
             />
           </div>
+
+          {terminalOpen && (
+            <div style={{ height: terminalHeight, borderTop: '0.5px solid #30363d', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+              <div
+                style={{ height: 4, cursor: 'row-resize', background: 'transparent' }}
+                onMouseDown={startTerminalResize}
+                onMouseEnter={e => e.currentTarget.style.background = '#58a6ff'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              />
+              <div style={s.terminalHeader}>
+                <span style={{ fontSize: 12, color: '#7dd3fc' }}>⚡ Terminal</span>
+                <span style={{ fontSize: 11, color: '#6e7681', flex: 1, marginRight: 8 }}>{currentDir}</span>
+                <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer' }} onClick={() => setTerminalHistory([{ type: 'system', text: '🐙 Terminal جاهز' }])}>🗑</button>
+                <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer' }} onClick={() => setTerminalOpen(false)}>✕</button>
+              </div>
+              <div style={s.terminalBody}>
+                {terminalHistory.map((h, i) => (
+                  <div key={i} style={{
+                    fontSize: 12, fontFamily: 'JetBrains Mono, Consolas, monospace',
+                    color: h.type === 'input' ? '#7dd3fc' : h.type === 'error' ? '#ff7b72' : h.type === 'system' ? '#7ee787' : '#c9d1d9',
+                    lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                  }}>{h.text}</div>
+                ))}
+                <div ref={terminalBottomRef} />
+              </div>
+              <div style={s.terminalInput}>
+                <span style={{ color: '#7dd3fc', fontFamily: 'monospace', fontSize: 13 }}>$</span>
+                <input
+                  style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#e6edf3', fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 13 }}
+                  value={terminalInput}
+                  onChange={e => setTerminalInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') runCommand(terminalInput); }}
+                  placeholder="اكتب أمراً..."
+                  dir="ltr"
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={s.rightPanel}>
@@ -529,45 +566,6 @@ export default function App() {
         </div>
       </div>
 
-      {terminalOpen && (
-        <div ref={terminalRef} style={{ ...s.terminal, height: terminalHeight }}>
-          <div
-            style={{ height: 4, cursor: 'row-resize', background: 'transparent', flexShrink: 0 }}
-            onMouseDown={startTerminalResize}
-            onMouseEnter={e => e.currentTarget.style.background = '#58a6ff'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-          />
-          <div style={s.terminalHeader}>
-            <span style={{ fontSize: 12, color: '#7dd3fc' }}>⚡ Terminal</span>
-            <span style={{ fontSize: 11, color: '#6e7681', flex: 1, marginRight: 8 }}>{currentDir}</span>
-            <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer', fontSize: 14 }} onClick={() => setTerminalHistory([{ type: 'system', text: '🐙 Terminal أخطبوط جاهز' }])}>🗑</button>
-            <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer', fontSize: 14 }} onClick={() => setTerminalOpen(false)}>✕</button>
-          </div>
-          <div style={s.terminalBody}>
-            {terminalHistory.map((h, i) => (
-              <div key={i} style={{
-                fontSize: 12, fontFamily: 'JetBrains Mono, Consolas, monospace',
-                color: h.type === 'input' ? '#7dd3fc' : h.type === 'error' ? '#ff7b72' : h.type === 'system' ? '#7ee787' : '#c9d1d9',
-                lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-              }}>{h.text}</div>
-            ))}
-            <div ref={terminalBottomRef} />
-          </div>
-          <div style={s.terminalInput}>
-            <span style={{ color: '#7dd3fc', fontFamily: 'monospace', fontSize: 13 }}>$</span>
-            <input
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#e6edf3', fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 13 }}
-              value={terminalInput}
-              onChange={e => setTerminalInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') runCommand(terminalInput); }}
-              placeholder="اكتب أمراً..."
-              dir="ltr"
-              autoFocus
-            />
-          </div>
-        </div>
-      )}
-
       <div style={s.commandBar}>
         <textarea
           style={s.commandInput}
@@ -581,7 +579,6 @@ export default function App() {
         <button style={s.sendBtn} onClick={send} disabled={loading}>
           {loading ? "⏳" : "إرسال ➤"}
         </button>
-      </div>
       </div>
     </div>
   );
