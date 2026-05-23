@@ -87,7 +87,7 @@ export default function App() {
       activateLeg(6, "تولّد الكود...");
 
       if (data.success) {
-        setTimeout(() => {
+        setTimeout(async () => {
           completeLeg(3);
           completeLeg(6);
           activateLeg(8, "تدمج النتائج...");
@@ -95,12 +95,29 @@ export default function App() {
           const code = extractCode(data.result);
           if (code) {
             const fileName = extractFileName(text) || activeFile;
+
+            // تحديث المحرر
             setFiles(prev => {
               const exists = prev.find(f => f.name === fileName);
               if (exists) return prev.map(f => f.name === fileName ? { ...f, content: code } : f);
               return [...prev, { name: fileName, content: code }];
             });
             setActiveFile(fileName);
+
+            // حفظ الملف على الجهاز تلقائياً
+            const fileObj = files.find(f => f.name === fileName);
+            const savePath = fileObj?.path || null;
+            if (savePath) {
+              await fetch(`${BACKEND}/api/files/write`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filePath: savePath, content: code }),
+              });
+              setMessages(prev => [...prev, {
+                role: 'octopus',
+                text: `✅ تم حفظ التعديلات على: ${savePath}`
+              }]);
+            }
           }
 
           setTimeout(() => completeLeg(8), 800);
