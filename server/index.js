@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const pathModule = require('path');
 const { exec, spawn } = require('child_process');
+const chokidar = require('chokidar');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,24 +18,149 @@ app.use(express.json());
 // تخزين تاريخ المحادثات لكل جلسة
 const sessions = {};
 let runningProcess = null;
+let watcher = null;
+let watchClients = [];
 
-const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء وتعديل المشاريع البرمجية الكاملة.
+const PROVIDERS = [
+  // Groq
+  async (messages, maxTokens) => {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages, temperature: 0.5, max_tokens: maxTokens,
+    });
+    return completion.choices[0].message.content;
+  },
+  // Groq backup model
+  async (messages, maxTokens) => {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages, temperature: 0.5, max_tokens: maxTokens,
+    });
+    return completion.choices[0].message.content;
+  },
+  // OpenRouter
+  async (messages, maxTokens) => {
+    if (!process.env.OPENROUTER_API_KEY) throw new Error('no key');
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-3.3-70b-instruct:free',
+        messages, max_tokens: maxTokens,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    return data.choices[0].message.content;
+  },
+  // Gemini
+  async (messages, maxTokens) => {
+    if (!process.env.GEMINI_API_KEY) throw new Error('no key');
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  },
+];
 
-قدراتك:
-- تكتب وتعدّل كود احترافي بأي لغة برمجة
-- تفهم محتوى الملفات وتعدّل عليها بدقة
-- تتذكر كل ما تحدثنا عنه في هذه الجلسة
-- عندما يشاركك المستخدم محتوى ملف، تحلله وتعدّل عليه مباشرة
-- تجيب دائماً بالعربية ما لم يطلب المستخدم غير ذلك
-- عندما تكتب كوداً للحفظ، ضعه دائماً في كتلة \`\`\`
+async function callAI(messages, maxTokens = 400) {
+  for (const provider of PROVIDERS) {
+    try {
+      const result = await provider(messages, maxTokens);
+      if (result) return result;
+    } catch (error) {
+      if (error.message === 'no key') continue;
+      if (error.status === 429 || (error.message && error.message.includes('Rate limit'))) {
+        console.log(`⚠️ provider محدود، جرب التالي...`);
+        await new Promise(r => setTimeout(r, 500));
+        continue;
+      }
+      console.log(`⚠️ خطأ في provider: ${error.message}`);
+      continue;
+    }
+  }
+  throw new Error('كل الـ providers محدودة، انتظر قليلاً');
+}
 
-عندما يطلب المستخدم تشغيل أمر أو تنفيذ شيء في Terminal، أجب بهذا الشكل بالضبط:
-<terminal>الأمر هنا</terminal>
+function createEightLegPlan(command, terminal = null) {
+  return {
+    tasks: [
+      { leg: 1, name: "رجل الكتابة", task: "كتابة الكود الرئيسي", prompt: `اكتب الجزء الرئيسي المطلوب لهذا الطلب: ${command}` },
+      { leg: 2, name: "رجل الفحص", task: "فحص وتحليل المتطلبات", prompt: `حلل المتطلبات والمخاطر لهذا الطلب: ${command}` },
+      { leg: 3, name: "رجل التعديل", task: "تعديل الملفات الموجودة", prompt: `حدد وعدل الملفات الموجودة اللازمة لهذا الطلب: ${command}` },
+      { leg: 4, name: "رجل الاختبار", task: "التحقق والاختبار", prompt: `اقترح أو اكتب اختبارات وتحقق من صحة هذا الطلب: ${command}` },
+      { leg: 5, name: "رجل الإدارة", task: "تنظيم هيكل المشروع", prompt: `نظم هيكل الملفات والمجلدات لهذا الطلب: ${command}` },
+      { leg: 6, name: "رجل التوليد", task: "توليد كود إضافي", prompt: `ولد أي كود مساعد أو إضافي مطلوب لهذا الطلب: ${command}` },
+      { leg: 7, name: "رجل التحديث", task: "تحديث الإعدادات", prompt: `حدث إعدادات المشروع أو config المطلوبة لهذا الطلب: ${command}` },
+      { leg: 8, name: "رجل الدمج", task: "دمج النتائج", prompt: `ادمج وتأكد من تكامل كل أجزاء هذا الطلب: ${command}` },
+    ],
+    summary: command,
+    terminal,
+  };
+}
 
-مثال: إذا قال "شغّل المشروع" أجب:
-<terminal>npm run dev</terminal>
+const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء المشاريع البرمجية.
 
-أسلوبك: دقيق، مباشر، عملي. لا حشو ولا كلام فارغ.`;
+## قاعدة ذهبية:
+- إنشاء مشروع Laravel = <terminal>composer create-project laravel/laravel .</terminal>
+- إنشاء مشروع React = <terminal>npx create-react-app .</terminal>
+- إنشاء مشروع Next.js = <terminal>npx create-next-app .</terminal>
+- لا تكتب محتوى composer.json أو package.json يدوياً أبداً عند إنشاء مشروع جديد
+
+## قواعد صارمة:
+
+### لتشغيل أمر في terminal:
+<terminal>npm install</terminal>
+<terminal>composer create-project laravel/laravel .</terminal>
+<terminal>php artisan migrate</terminal>
+
+### لإنشاء أو تعديل ملف:
+<file path="routes/web.php">
+<?php
+Route::get('/', function () {
+    return view('welcome');
+});
+</file>
+
+### مهم جداً:
+- إنشاء مشروع = <terminal>composer create-project...</terminal> وليس <file>
+- كل ملف له وسم <file path="..."> خاص به
+- لا تضع كل شيء في ملف واحد
+- الأوامر في <terminal> فقط
+- الكود في <file path="..."> فقط
+- تجيب بالعربية دائماً`;
+
+function saveTaggedFiles(response, projectDir = '') {
+  const fileMatches = response.matchAll(/<file path="([^"]+)">([\s\S]*?)<\/file>/g);
+  const savedFiles = [];
+  const rootDir = projectDir ? pathModule.resolve(projectDir) : process.cwd();
+
+  for (const match of fileMatches) {
+    const filePath = match[1];
+    const fileContent = match[2].trim();
+    if (filePath.toLowerCase() === 'terminal') {
+      console.warn('تم تجاهل ملف غير صالح باسم terminal');
+      continue;
+    }
+
+    try {
+      const fullPath = pathModule.resolve(rootDir, filePath);
+      fs.mkdirSync(pathModule.dirname(fullPath), { recursive: true });
+      fs.writeFileSync(fullPath, fileContent, 'utf8');
+      savedFiles.push({ path: fullPath, name: pathModule.basename(fullPath) });
+      console.log(`🐙 حفظ: ${fullPath}`);
+    } catch (e) {
+      console.error(`خطأ في حفظ ${filePath}:`, e.message);
+    }
+  }
+
+  return savedFiles;
+}
 
 app.get('/', (req, res) => {
   res.json({ message: '🐙 أخطبوط يعمل!' });
@@ -42,56 +168,32 @@ app.get('/', (req, res) => {
 
 app.post('/api/octopus', async (req, res) => {
   try {
-    const { command, sessionId = 'default', activeFile = '', activeFileContent = '' } = req.body;
+    const { command, sessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '' } = req.body;
 
-    // إنشاء جلسة جديدة إن لم تكن موجودة
     if (!sessions[sessionId]) {
       sessions[sessionId] = [];
     }
 
-    // إضافة رسالة المستخدم للتاريخ
     const fullCommand = activeFileContent
       ? `الملف الحالي المفتوح: ${activeFile}\n\`\`\`\n${activeFileContent.slice(0, 3000)}\n\`\`\`\n\nطلب المستخدم: ${command}`
       : command;
+
     sessions[sessionId].push({ role: 'user', content: fullCommand });
 
-    // الاحتفاظ بآخر 20 رسالة فقط لتجنب تجاوز الحد
     if (sessions[sessionId].length > 20) {
       sessions[sessionId] = sessions[sessionId].slice(-20);
     }
 
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        ...sessions[sessionId]
-      ],
-      temperature: 0.7,
-      max_tokens: 2048,
-    });
+    const response = await callAI([
+      { role: 'system', content: SYSTEM_PROMPT },
+      ...sessions[sessionId]
+    ], 2048);
 
-    const response = completion.choices[0].message.content;
+    const savedFiles = saveTaggedFiles(response, projectDir);
 
-    // استخراج الكود تلقائياً وحفظه
-    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)```/);
-    const fileMatch = response.match(/([a-zA-Z0-9_\-]+\.[a-zA-Z]+)/);
-    if (codeMatch && fileMatch) {
-      const fileName = fileMatch[1];
-      const code = codeMatch[1];
-      const savePath = path.join('C:\\Users\\kozer\\Desktop\\octopus-ai', fileName);
-      try {
-        fs.mkdirSync(path.dirname(savePath), { recursive: true });
-        fs.writeFileSync(savePath, code, 'utf8');
-        console.log(`🐙 حفظ الملف: ${savePath}`);
-      } catch(e) {
-        console.error('خطأ في حفظ الملف:', e.message);
-      }
-    }
-
-    // إضافة رد أخطبوط للتاريخ
     sessions[sessionId].push({ role: 'assistant', content: response });
 
-    res.json({ success: true, result: response, sessionId });
+    res.json({ success: true, result: response, sessionId, savedFiles });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -99,69 +201,117 @@ app.post('/api/octopus', async (req, res) => {
 
 app.post('/api/octopus/parallel', async (req, res) => {
   try {
-    const { command, sessionId = 'default', activeFile = '', activeFileContent = '' } = req.body;
+    const { command, sessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '' } = req.body;
 
-    // المرحلة الأولى: الدماغ يحلل ويقسم المهام
-    const planPrompt = `أنت دماغ أخطبوط 🐙. مهمتك تحليل الطلب وتقسيمه لمهام متوازية.
+    const planPrompt = `أنت دماغ أخطبوط. مهمتك توزيع العمل على الأرجل الثمانية دائماً.
 
 الطلب: ${command}
 الملف الحالي: ${activeFile}
 
-أجب بـ JSON فقط بهذا الشكل بدون أي نص آخر:
+قاعدة ذهبية للمشاريع الجديدة:
+- إنشاء مشروع Laravel يجب أن يكون terminal فقط: composer create-project laravel/laravel .
+- إنشاء مشروع React يجب أن يكون terminal فقط: npx create-react-app .
+- إنشاء مشروع Next.js يجب أن يكون terminal فقط: npx create-next-app .
+- لا تطلب كتابة composer.json أو package.json يدوياً عند إنشاء مشروع جديد.
+- إذا كان الطلب إنشاء مشروع جديد، ضع الأمر المناسب في حقل terminal.
+
+وزّع العمل على الأرجل الثمانية — كل رجل لها دور حتى لو كان صغيراً:
+1. رجل الكتابة — يكتب الكود الرئيسي
+2. رجل الفحص — يفحص ويحلل المتطلبات
+3. رجل التعديل — يعدّل الملفات الموجودة
+4. رجل الاختبار — يكتب اختبارات أو يتحقق
+5. رجل الإدارة — ينظم هيكل المشروع
+6. رجل التوليد — يولّد كود إضافي
+7. رجل التحديث — يحدّث الإعدادات والـ config
+8. رجل الدمج — يدمج ويتأكد من التكامل
+
+أجب بـ JSON فقط:
 {
   "tasks": [
-    {"leg": 1, "name": "رجل الكتابة", "task": "وصف المهمة", "prompt": "الأمر التفصيلي للرجل"},
-    {"leg": 2, "name": "رجل الفحص", "task": "وصف المهمة", "prompt": "الأمر التفصيلي للرجل"}
+    {"leg": 1, "name": "رجل الكتابة", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يكتبه"},
+    {"leg": 2, "name": "رجل الفحص", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يفحصه"},
+    {"leg": 3, "name": "رجل التعديل", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يعدله"},
+    {"leg": 4, "name": "رجل الاختبار", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يختبره"},
+    {"leg": 5, "name": "رجل الإدارة", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب ينظمه"},
+    {"leg": 6, "name": "رجل التوليد", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يولده"},
+    {"leg": 7, "name": "رجل التحديث", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يحدثه"},
+    {"leg": 8, "name": "رجل الدمج", "task": "وصف مهمته", "prompt": "تفاصيل ما يجب يدمجه"}
   ],
-  "summary": "ملخص ما سيتم بناؤه"
-}
-
-ضع فقط الأرجل التي لها عمل حقيقي، من 1 إلى 4 أرجل كحد أقصى.`;
-
-    const planCompletion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: planPrompt }],
-      temperature: 0.3,
-      max_tokens: 1000,
-    });
+  "summary": "ملخص ما سيتم بناؤه",
+  "terminal": "الأمر إذا كان مطلوباً وإلا null"
+}`;
 
     let plan;
     try {
-      const planText = planCompletion.choices[0].message.content;
+      const planText = await callAI([{ role: 'user', content: planPrompt }], 1000);
       const jsonMatch = planText.match(/\{[\s\S]*\}/);
       plan = JSON.parse(jsonMatch[0]);
     } catch {
-      plan = { tasks: [{ leg: 1, name: "رجل الكتابة", task: command, prompt: command }], summary: command };
+      plan = createEightLegPlan(command);
     }
 
-    // المرحلة الثانية: تنفيذ المهام بالتوازي
-    const taskPromises = plan.tasks.map(async (task) => {
-      const completion = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
-        messages: [
+    // إجبار 8 أرجل دائماً
+    const allLegs = [
+      { leg: 1, name: "رجل الكتابة" },
+      { leg: 2, name: "رجل الفحص" },
+      { leg: 3, name: "رجل التعديل" },
+      { leg: 4, name: "رجل الاختبار" },
+      { leg: 5, name: "رجل الإدارة" },
+      { leg: 6, name: "رجل التوليد" },
+      { leg: 7, name: "رجل التحديث" },
+      { leg: 8, name: "رجل الدمج" },
+    ];
+
+    if (!Array.isArray(plan.tasks)) {
+      plan.tasks = [];
+    }
+
+    allLegs.forEach(leg => {
+      if (!plan.tasks.find(task => Number(task.leg) === leg.leg)) {
+        plan.tasks.push({
+          leg: leg.leg,
+          name: leg.name,
+          task: `مساعدة في: ${command}`,
+          prompt: `ساعد في تنفيذ هذا الطلب من منظور ${leg.name}: ${command}`
+        });
+      }
+    });
+
+    plan.tasks = plan.tasks
+      .filter(task => Number(task.leg) >= 1 && Number(task.leg) <= 8)
+      .sort((a, b) => Number(a.leg) - Number(b.leg))
+      .slice(0, 8);
+
+    if (String(plan.terminal || '').toLowerCase() === 'null') {
+      plan.terminal = null;
+    }
+
+    // تقسيم المهام لمجموعتين من 4 تعملان بالتوازي
+    const chunk1 = plan.tasks.slice(0, 4);
+    const chunk2 = plan.tasks.slice(4, 8);
+
+    const runChunk = async (chunk) => Promise.all(chunk.map(async (task) => {
+      try {
+        const result = await callAI([
           {
             role: 'system',
-            content: `أنت ${task.name} في نظام أخطبوط. مهمتك المحددة: ${task.task}. اكتب الكود المطلوب فقط داخل كتلة \`\`\` بدون شرح زائد.`
+            content: `أنت ${task.name} في نظام أخطبوط. مهمتك: ${task.task}. اكتب الكود في كتلة \`\`\`.`
           },
           {
             role: 'user',
             content: activeFileContent
-              ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\n${task.prompt}`
+              ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 1000)}\n\`\`\`\n\n${task.prompt}`
               : task.prompt
           }
-        ],
-        temperature: 0.5,
-        max_tokens: 1500,
-      });
-      return {
-        leg: task.leg,
-        name: task.name,
-        task: task.task,
-        result: completion.choices[0].message.content,
-      };
-    });
+        ], 400);
+        return { leg: task.leg, name: task.name, task: task.task, result };
+      } catch (e) {
+        return { leg: task.leg, name: task.name, task: task.task, result: `// ${task.name} غير متاح حالياً` };
+      }
+    }));
 
-    const results = await Promise.all(taskPromises);
+    const [results1, results2] = await Promise.all([runChunk(chunk1), runChunk(chunk2)]);
+    const results = [...results1, ...results2];
 
     // المرحلة الثالثة: رجل الدمج يجمع النتائج
     const mergePrompt = `أنت رجل الدمج في أخطبوط. اجمع نتائج الأرجل في إجابة واحدة متكاملة.
@@ -171,23 +321,29 @@ app.post('/api/octopus/parallel', async (req, res) => {
 نتائج الأرجل:
 ${results.map(r => `### ${r.name}:\n${r.result}`).join('\n\n')}
 
-اكتب الكود النهائي المدمج داخل كتلة \`\`\` واحدة.`;
+اكتب النتيجة النهائية بوسوم ملفات منفصلة فقط بهذا الشكل:
+<file path="المسار/النسبي/للملف">
+الكود هنا
+</file>
 
-    const mergeCompletion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: mergePrompt }],
-      temperature: 0.3,
-      max_tokens: 2000,
-    });
+لا تستخدم كتلة \`\`\` للكود النهائي إذا كان هناك ملفات.
 
-    const finalResult = mergeCompletion.choices[0].message.content;
+إذا كان هناك أمر terminal، اتركه كوسم <terminal>الأمر</terminal> ولا تحوله إلى <file path="terminal">.`;
+
+    const finalResult = await callAI([{ role: 'user', content: mergePrompt }], 2000);
+    const savedFiles = saveTaggedFiles(finalResult, projectDir);
+
+    const terminalMatch = finalResult.match(/<terminal>(.*?)<\/terminal>/s);
+    const terminalCommand = terminalMatch ? terminalMatch[1].trim() : (plan.terminal || null);
 
     res.json({
       success: true,
       result: finalResult,
       plan: plan,
       legResults: results,
+      terminalCommand,
       sessionId,
+      savedFiles,
     });
 
   } catch (error) {
@@ -239,7 +395,6 @@ app.post('/api/files/list', async (req, res) => {
       let files = [];
 
       for (const item of items) {
-        // تجاهل المجلدات الثقيلة
         if (['node_modules', '.git', '.next', 'dist', 'build', '__pycache__', 'vendor'].includes(item.name)) continue;
         if (item.name === '.env' || item.name.endsWith('.env')) continue;
         const fullItemPath = pathModule.join(dir, item.name);
@@ -250,7 +405,6 @@ app.post('/api/files/list', async (req, res) => {
         }
       }
 
-      // مجلدات أولاً ثم ملفات، كل مجموعة مرتبة أبجدياً
       dirs.sort((a, b) => a.name.localeCompare(b.name));
       files.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -271,13 +425,68 @@ app.post('/api/terminal', async (req, res) => {
     if (blocked.some(b => command.toLowerCase().includes(b))) {
       return res.json({ success: false, error: 'هذا الأمر ممنوع' });
     }
-    exec(command, { cwd: cwd || process.cwd(), timeout: 30000 }, (error, stdout, stderr) => {
-      res.json({
-        success: !error,
-        output: stdout || stderr || error?.message || '',
-        error: error ? error.message : null
-      });
+
+    exec(command, {
+      cwd: cwd || process.cwd(),
+      timeout: 600000,
+      maxBuffer: 1024 * 1024 * 10,
+      shell: 'cmd.exe'
+    }, (error, stdout, stderr) => {
+      if (!res.headersSent) {
+        res.json({
+          success: !error || !!stdout,
+          output: stdout || stderr || error?.message || '',
+        });
+      }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/terminal/stream', async (req, res) => {
+  try {
+    const { command, cwd } = req.body;
+    const blocked = ['rm -rf', 'del /f /s', 'format', 'shutdown', 'reboot'];
+    if (blocked.some(b => command.toLowerCase().includes(b))) {
+      return res.json({ success: false, error: 'هذا الأمر ممنوع' });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    req.setTimeout(0);
+    res.setTimeout(0);
+
+    const proc = spawn('cmd.exe', ['/c', command], {
+      cwd: cwd || process.cwd(),
+      env: { ...process.env }
+    });
+
+    proc.stdout.on('data', d => {
+      try { res.write(`data: ${JSON.stringify({ output: d.toString() })}\n\n`); } catch { }
+    });
+
+    proc.stderr.on('data', d => {
+      try { res.write(`data: ${JSON.stringify({ output: d.toString() })}\n\n`); } catch { }
+    });
+
+    proc.on('close', (code) => {
+      try {
+        res.write(`data: ${JSON.stringify({ done: true, code: code || 0 })}\n\n`);
+        res.end();
+      } catch { }
+    });
+
+    proc.on('error', (err) => {
+      try {
+        res.write(`data: ${JSON.stringify({ output: err.message, done: true, code: 1 })}\n\n`);
+        res.end();
+      } catch { }
+    });
+
+    req.on('close', () => proc.kill());
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -305,10 +514,9 @@ app.post('/api/run', async (req, res) => {
     runningProcess.stderr.on('data', d => { output += d.toString(); });
     runningProcess.on('exit', () => { runningProcess = null; });
 
-    // أرجع response بعد ثانيتين
     setTimeout(() => {
       res.json({ success: true, output: output || '✅ العملية شغّالة في الخلفية', pid: runningProcess?.pid });
-    }, 2000);
+    }, 5000);
 
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -328,6 +536,54 @@ app.post('/api/stop', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
+});
+
+// SSE لمراقبة الملفات
+app.get('/api/watch', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.write('data: {"connected": true}\n\n');
+
+  watchClients.push(res);
+  req.on('close', () => {
+    watchClients = watchClients.filter(client => client !== res);
+  });
+});
+
+app.post('/api/watch/start', (req, res) => {
+  const { dirPath } = req.body;
+  if (watcher) watcher.close();
+
+  watcher = chokidar.watch(dirPath, {
+    ignored: /(node_modules|\.git|vendor|\.next|dist)/,
+    persistent: true,
+    ignoreInitial: true,
+  });
+
+  watcher.on('add', filePath => {
+    const event = JSON.stringify({ type: 'add', path: filePath, name: pathModule.basename(filePath) });
+    watchClients.forEach(client => {
+      try { client.write(`data: ${event}\n\n`); } catch { }
+    });
+  });
+
+  watcher.on('change', filePath => {
+    const event = JSON.stringify({ type: 'change', path: filePath, name: pathModule.basename(filePath) });
+    watchClients.forEach(client => {
+      try { client.write(`data: ${event}\n\n`); } catch { }
+    });
+  });
+
+  res.json({ success: true });
+});
+
+app.post('/api/watch/stop', (req, res) => {
+  if (watcher) {
+    watcher.close();
+    watcher = null;
+  }
+  res.json({ success: true });
 });
 
 app.post('/api/search', async (req, res) => {

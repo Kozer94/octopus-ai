@@ -129,7 +129,7 @@ function OctopusWorking({ active, legs }) {
       zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
       pointerEvents: 'none',
     }}>
-      <div style={{ position: 'relative', width: 80, height: 80 }}>
+      <div style={{ position: 'relative', width: 120, height: 120 }}>
         <style>{`
           @keyframes octopusBob {
             0%, 100% { transform: translateY(0px) rotate(-3deg); }
@@ -153,24 +153,30 @@ function OctopusWorking({ active, legs }) {
           }
         `}</style>
 
-        <svg width="80" height="80" viewBox="0 0 80 80" style={{ animation: 'octopusBob 1.2s ease-in-out infinite' }}>
-          <ellipse cx="40" cy="30" rx="22" ry="20" fill="#7dd3fc" opacity="0.95" />
-          <ellipse cx="40" cy="22" rx="18" ry="16" fill="#7dd3fc" />
-          <g style={{ animation: 'octopusBlink 3s infinite', transformOrigin: '40px 20px' }}>
-            <circle cx="33" cy="20" r="4" fill="white" />
-            <circle cx="47" cy="20" r="4" fill="white" />
-            <circle cx="34" cy="21" r="2.5" fill="#0d1117" />
-            <circle cx="48" cy="21" r="2.5" fill="#0d1117" />
-            <circle cx="34.8" cy="20.2" r="0.8" fill="white" />
-            <circle cx="48.8" cy="20.2" r="0.8" fill="white" />
+        <svg width="120" height="120" viewBox="0 0 120 120" style={{ animation: 'octopusBob 1.2s ease-in-out infinite' }}>
+          <ellipse cx="60" cy="45" rx="32" ry="28" fill="#ff6b2b" />
+          <ellipse cx="60" cy="34" rx="28" ry="24" fill="#ff8c42" />
+          <ellipse cx="60" cy="42" rx="20" ry="14" fill="#e85520" opacity="0.4" />
+          <g style={{ animation: 'octopusBlink 3s infinite', transformOrigin: '60px 30px' }}>
+            <circle cx="49" cy="30" r="7" fill="white" />
+            <circle cx="71" cy="30" r="7" fill="white" />
+            <circle cx="50.5" cy="31.5" r="4.5" fill="#1a0a00" />
+            <circle cx="72.5" cy="31.5" r="4.5" fill="#1a0a00" />
+            <circle cx="51.5" cy="30" r="1.5" fill="white" />
+            <circle cx="73.5" cy="30" r="1.5" fill="white" />
           </g>
-          <path d="M34 27 Q40 31 46 27" stroke="#0d1117" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          <path d="M50 42 Q60 49 70 42" stroke="#c23d0a" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <circle cx="45" cy="50" r="3" fill="#ff4500" opacity="0.6" />
+          <circle cx="60" cy="55" r="3" fill="#ff4500" opacity="0.6" />
+          <circle cx="75" cy="50" r="3" fill="#ff4500" opacity="0.6" />
           {[0, 1, 2, 3, 4, 5, 6, 7].map(i => {
-            const x = 18 + i * 6.5;
+            const x = 24 + i * 10.5;
             const delay = i * 0.15;
+            const curve = i % 2 === 0 ? -6 : 6;
             return (
-              <g key={i} style={{ transformOrigin: `${x}px 45px`, animation: `${i % 2 === 0 ? 'tentacle1' : 'tentacle2'} ${0.8 + i * 0.1}s ease-in-out infinite`, animationDelay: `${delay}s` }}>
-                <path d={`M${x} 45 Q${x - 4 + i} ${55 + i} ${x - 2} 65`} stroke="#7dd3fc" strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.8" />
+              <g key={i} style={{ transformOrigin: `${x}px 65px`, animation: `${i % 2 === 0 ? 'tentacle1' : 'tentacle2'} ${0.7 + i * 0.08}s ease-in-out infinite`, animationDelay: `${delay}s` }}>
+                <path d={`M${x} 65 Q${x + curve} 82 ${x + curve * 0.5} 100`} stroke="#ff6b2b" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.9" />
+                <path d={`M${x} 65 Q${x + curve} 82 ${x + curve * 0.5} 100`} stroke="#ff8c42" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.5" />
               </g>
             );
           })}
@@ -345,11 +351,25 @@ export default function App() {
     setTerminalInput('');
     setTerminalOpen(true);
     setTerminalTab('terminal');
+
     try {
-      const res = await fetch(`${BACKEND}/api/terminal`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: cmd, cwd: currentDir }) });
+      const controller = new AbortController();
+      const res = await fetch(`${BACKEND}/api/terminal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, cwd: currentDir }),
+        signal: controller.signal,
+      });
       const data = await res.json();
-      setTerminalHistory(prev => [...prev, { type: data.success ? 'output' : 'error', text: data.output || data.error || '' }]);
-    } catch { setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ تعذّر تشغيل الأمر' }]); }
+      setTerminalHistory(prev => [...prev, {
+        type: data.success ? 'output' : 'error',
+        text: data.output || data.error || ''
+      }]);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ ' + e.message }]);
+      }
+    }
   }
 
   async function toggleRun() {
@@ -460,10 +480,43 @@ export default function App() {
     activateLeg(2, "تفحص الملفات...");
     const currentFile = files.find(f => f.name === activeFile);
     try {
-      const isComplexTask = text.length > 30 || text.includes('أضف') || text.includes('أنشئ') || text.includes('بني') || text.includes('create') || text.includes('add');
+      const isComplexTask = text.length > 20;
       const endpoint = isComplexTask ? '/api/octopus/parallel' : '/api/octopus';
-      const res = await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "" }) });
+      const res = await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "", projectDir: currentDir }) });
       const data = await res.json();
+      if (data.terminalCommand) {
+        setTerminalOpen(true);
+        await runCommand(data.terminalCommand);
+      }
+      // فتح الملفات المحفوظة تلقائياً
+      if (data.savedFiles && data.savedFiles.length > 0) {
+        for (const file of data.savedFiles) {
+          const res2 = await fetch(`${BACKEND}/api/files/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: file.path }),
+          });
+          const fileData = await res2.json();
+          if (fileData.success) {
+            setFiles(prev => {
+              const exists = prev.find(f => f.path === file.path);
+              if (exists) return prev.map(f => f.path === file.path ? { ...f, content: fileData.content } : f);
+              return [...prev, { name: file.name, path: file.path, content: fileData.content }];
+            });
+            setActiveFile(file.name);
+          }
+        }
+
+        if (currentDir) {
+          fetch(`${BACKEND}/api/files/list`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dirPath: currentDir }),
+          }).then(r => r.json()).then(d => {
+            if (d.success) setFileTree(d.items);
+          });
+        }
+      }
       // عرض خطة الأرجل إذا كان parallel
       if (data.plan) {
         data.plan.tasks.forEach(task => {
