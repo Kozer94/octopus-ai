@@ -1,13 +1,4 @@
-node_modules
+node_modules/
 .env
-*.env
 server/.env
-.vscode
-dist
-client/dist
-node_modules
-node_modules
-node_modules
-node_modules
-node_modules
-node_modules
+server/node_modules/
