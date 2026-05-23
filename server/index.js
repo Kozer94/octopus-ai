@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
+const fs = require('fs');
+const path = require('path');
+const pathModule = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -57,6 +60,22 @@ app.post('/api/octopus', async (req, res) => {
 
     const response = completion.choices[0].message.content;
 
+    // استخراج الكود تلقائياً وحفظه
+    const codeMatch = response.match(/```(?:\w+)?\n([\s\S]*?)```/);
+    const fileMatch = response.match(/([a-zA-Z0-9_\-]+\.[a-zA-Z]+)/);
+    if (codeMatch && fileMatch) {
+      const fileName = fileMatch[1];
+      const code = codeMatch[1];
+      const savePath = path.join('C:\\Users\\kozer\\Desktop\\octopus-ai', fileName);
+      try {
+        fs.mkdirSync(path.dirname(savePath), { recursive: true });
+        fs.writeFileSync(savePath, code, 'utf8');
+        console.log(`🐙 حفظ الملف: ${savePath}`);
+      } catch(e) {
+        console.error('خطأ في حفظ الملف:', e.message);
+      }
+    }
+
     // إضافة رد أخطبوط للتاريخ
     sessions[sessionId].push({ role: 'assistant', content: response });
 
@@ -71,6 +90,48 @@ app.post('/api/reset', (req, res) => {
   const { sessionId = 'default' } = req.body;
   sessions[sessionId] = [];
   res.json({ success: true, message: 'تم مسح المحادثة' });
+});
+
+// كتابة ملف
+app.post('/api/files/write', async (req, res) => {
+  try {
+    const { filePath, content } = req.body;
+    const fullPath = pathModule.resolve(filePath);
+    fs.mkdirSync(pathModule.dirname(fullPath), { recursive: true });
+    fs.writeFileSync(fullPath, content, 'utf8');
+    res.json({ success: true, path: fullPath });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// قراءة ملف
+app.post('/api/files/read', async (req, res) => {
+  try {
+    const { filePath } = req.body;
+    const fullPath = pathModule.resolve(filePath);
+    const content = fs.readFileSync(fullPath, 'utf8');
+    res.json({ success: true, content });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// قراءة مجلد
+app.post('/api/files/list', async (req, res) => {
+  try {
+    const { dirPath } = req.body;
+    const fullPath = pathModule.resolve(dirPath);
+    const items = fs.readdirSync(fullPath, { withFileTypes: true });
+    const result = items.map(item => ({
+      name: item.name,
+      type: item.isDirectory() ? 'dir' : 'file',
+      path: pathModule.join(fullPath, item.name)
+    }));
+    res.json({ success: true, items: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 app.listen(PORT, () => {

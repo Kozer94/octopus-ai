@@ -1,4 +1,10 @@
 node_modules/
 .env
+*.env
 server/.env
 server/node_modules/
+.vscode/
+dist/
+client/dist/
+dev.log
+dev.err.log
