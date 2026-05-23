@@ -288,6 +288,17 @@ export default function App() {
           completeLeg(3); completeLeg(6);
           activateLeg(8, "تدمج النتائج...");
 
+          // استخراج أوامر Terminal
+          const terminalMatch = data.result.match(/<terminal>(.*?)<\/terminal>/s);
+          if (terminalMatch) {
+            const cmd = terminalMatch[1].trim();
+            setTerminalOpen(true);
+            setTerminalHistory(prev => [...prev,
+              { type: 'system', text: `🐙 أخطبوط يشغّل: ${cmd}` }
+            ]);
+            await runCommand(cmd);
+          }
+
           const code = extractCode(data.result);
           if (code) {
             setFiles(prev => {
