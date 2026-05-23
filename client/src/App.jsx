@@ -340,8 +340,20 @@ export default function App() {
     activateLeg(2, "تفحص الملفات...");
     const currentFile = files.find(f => f.name === activeFile);
     try {
-      const res = await fetch(`${BACKEND}/api/octopus`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "" }) });
+      const isComplexTask = text.length > 30 || text.includes('أضف') || text.includes('أنشئ') || text.includes('بني') || text.includes('create') || text.includes('add');
+      const endpoint = isComplexTask ? '/api/octopus/parallel' : '/api/octopus';
+      const res = await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "" }) });
       const data = await res.json();
+      // عرض خطة الأرجل إذا كان parallel
+      if (data.plan) {
+        data.plan.tasks.forEach(task => {
+          activateLeg(task.leg, task.task);
+        });
+        setMessages(prev => [...prev, {
+          role: 'octopus',
+          text: `🐙 خطة العمل:\n${data.plan.tasks.map(t => `• ${t.name}: ${t.task}`).join('\n')}\n\n${data.plan.summary}`
+        }]);
+      }
       completeLeg(1); completeLeg(2);
       activateLeg(3, "تعدّل الكود..."); activateLeg(6, "تولّد الكود...");
       if (data.success) {

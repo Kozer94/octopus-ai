@@ -97,6 +97,104 @@ app.post('/api/octopus', async (req, res) => {
   }
 });
 
+app.post('/api/octopus/parallel', async (req, res) => {
+  try {
+    const { command, sessionId = 'default', activeFile = '', activeFileContent = '' } = req.body;
+
+    // المرحلة الأولى: الدماغ يحلل ويقسم المهام
+    const planPrompt = `أنت دماغ أخطبوط 🐙. مهمتك تحليل الطلب وتقسيمه لمهام متوازية.
+
+الطلب: ${command}
+الملف الحالي: ${activeFile}
+
+أجب بـ JSON فقط بهذا الشكل بدون أي نص آخر:
+{
+  "tasks": [
+    {"leg": 1, "name": "رجل الكتابة", "task": "وصف المهمة", "prompt": "الأمر التفصيلي للرجل"},
+    {"leg": 2, "name": "رجل الفحص", "task": "وصف المهمة", "prompt": "الأمر التفصيلي للرجل"}
+  ],
+  "summary": "ملخص ما سيتم بناؤه"
+}
+
+ضع فقط الأرجل التي لها عمل حقيقي، من 1 إلى 4 أرجل كحد أقصى.`;
+
+    const planCompletion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: planPrompt }],
+      temperature: 0.3,
+      max_tokens: 1000,
+    });
+
+    let plan;
+    try {
+      const planText = planCompletion.choices[0].message.content;
+      const jsonMatch = planText.match(/\{[\s\S]*\}/);
+      plan = JSON.parse(jsonMatch[0]);
+    } catch {
+      plan = { tasks: [{ leg: 1, name: "رجل الكتابة", task: command, prompt: command }], summary: command };
+    }
+
+    // المرحلة الثانية: تنفيذ المهام بالتوازي
+    const taskPromises = plan.tasks.map(async (task) => {
+      const completion = await groq.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: `أنت ${task.name} في نظام أخطبوط. مهمتك المحددة: ${task.task}. اكتب الكود المطلوب فقط داخل كتلة \`\`\` بدون شرح زائد.`
+          },
+          {
+            role: 'user',
+            content: activeFileContent
+              ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\n${task.prompt}`
+              : task.prompt
+          }
+        ],
+        temperature: 0.5,
+        max_tokens: 1500,
+      });
+      return {
+        leg: task.leg,
+        name: task.name,
+        task: task.task,
+        result: completion.choices[0].message.content,
+      };
+    });
+
+    const results = await Promise.all(taskPromises);
+
+    // المرحلة الثالثة: رجل الدمج يجمع النتائج
+    const mergePrompt = `أنت رجل الدمج في أخطبوط. اجمع نتائج الأرجل في إجابة واحدة متكاملة.
+
+الطلب الأصلي: ${command}
+
+نتائج الأرجل:
+${results.map(r => `### ${r.name}:\n${r.result}`).join('\n\n')}
+
+اكتب الكود النهائي المدمج داخل كتلة \`\`\` واحدة.`;
+
+    const mergeCompletion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'user', content: mergePrompt }],
+      temperature: 0.3,
+      max_tokens: 2000,
+    });
+
+    const finalResult = mergeCompletion.choices[0].message.content;
+
+    res.json({
+      success: true,
+      result: finalResult,
+      plan: plan,
+      legResults: results,
+      sessionId,
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // مسح جلسة معينة
 app.post('/api/reset', (req, res) => {
   const { sessionId = 'default' } = req.body;
