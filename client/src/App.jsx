@@ -122,6 +122,27 @@ export default function App() {
     return match ? match[1] : null;
   }
 
+  async function openFolder() {
+    if (window.octopus) {
+      const folderPath = await window.octopus.openFolder();
+      if (folderPath) {
+        const res = await fetch(`${BACKEND}/api/files/list`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dirPath: folderPath }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          const newFiles = data.items
+            .filter(i => i.type === 'file')
+            .map(i => ({ name: i.name, content: '', path: i.path }));
+          setFiles(newFiles);
+          if (newFiles.length > 0) setActiveFile(newFiles[0].name);
+        }
+      }
+    }
+  }
+
   function onKey(e) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   }
@@ -156,8 +177,8 @@ export default function App() {
             {loading ? "يعمل..." : "جاهز"}
           </span>
         </div>
-        <button style={s.headerBtn}>
-          <span>📁</span> مشاريع
+        <button style={s.headerBtn} onClick={openFolder}>
+          <span>📁</span> فتح مجلد
         </button>
         <button style={s.headerBtn}>⚙️</button>
       </div>
@@ -181,7 +202,22 @@ export default function App() {
             <div
               key={f.name}
               style={s.fileItem(f.name === activeFile)}
-              onClick={() => setActiveFile(f.name)}
+              onClick={async () => {
+                setActiveFile(f.name);
+                if (f.path && !f.content) {
+                  const res = await fetch(`${BACKEND}/api/files/read`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filePath: f.path }),
+                  });
+                  const data = await res.json();
+                  if (data.success) {
+                    setFiles(prev => prev.map(file =>
+                      file.name === f.name ? { ...file, content: data.content } : file
+                    ));
+                  }
+                }
+              }}
             >
               <span style={{fontSize:12}}>📄</span>
               <span style={{fontSize:12, color: f.name === activeFile ? "#e6edf3" : "#8b949e"}}>

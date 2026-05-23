@@ -1,9 +1,8 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const dotenv = require('dotenv');
 
-// تحميل .env من مجلد server
 dotenv.config({ path: path.join(__dirname, 'server', '.env') });
 
 let serverProcess;
@@ -27,6 +26,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.js'),
     },
     show: false,
   });
@@ -36,6 +36,13 @@ function createWindow() {
     win.once('ready-to-show', () => win.show());
   }, 3000);
 }
+
+ipcMain.handle('open-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory']
+  });
+  return result.filePaths[0] || null;
+});
 
 app.whenReady().then(() => {
   startServer();
