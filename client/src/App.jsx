@@ -72,7 +72,12 @@ export default function App() {
       const res = await fetch(`${BACKEND}/api/octopus`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command: text, sessionId: SESSION_ID }),
+        body: JSON.stringify({
+          command: text,
+          sessionId: SESSION_ID,
+          activeFile: activeFile,
+          activeFileContent: currentFile?.content || '',
+        }),
       });
       const data = await res.json();
 

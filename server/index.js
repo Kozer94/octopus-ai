@@ -16,14 +16,15 @@ app.use(express.json());
 // تخزين تاريخ المحادثات لكل جلسة
 const sessions = {};
 
-const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء المشاريع البرمجية الكاملة.
+const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء وتعديل المشاريع البرمجية الكاملة.
 
 قدراتك:
-- تكتب كود احترافي بأي لغة برمجة
-- تشرح كل خطوة بوضوح
+- تكتب وتعدّل كود احترافي بأي لغة برمجة
+- تفهم محتوى الملفات وتعدّل عليها بدقة
 - تتذكر كل ما تحدثنا عنه في هذه الجلسة
-- تقترح أفضل الحلول التقنية
+- عندما يشاركك المستخدم محتوى ملف، تحلله وتعدّل عليه مباشرة
 - تجيب دائماً بالعربية ما لم يطلب المستخدم غير ذلك
+- عندما تكتب كوداً للحفظ، ضعه دائماً في كتلة \`\`\`
 
 أسلوبك: دقيق، مباشر، عملي. لا حشو ولا كلام فارغ.`;
 
@@ -33,7 +34,7 @@ app.get('/', (req, res) => {
 
 app.post('/api/octopus', async (req, res) => {
   try {
-    const { command, sessionId = 'default' } = req.body;
+    const { command, sessionId = 'default', activeFile = '', activeFileContent = '' } = req.body;
 
     // إنشاء جلسة جديدة إن لم تكن موجودة
     if (!sessions[sessionId]) {
@@ -41,7 +42,10 @@ app.post('/api/octopus', async (req, res) => {
     }
 
     // إضافة رسالة المستخدم للتاريخ
-    sessions[sessionId].push({ role: 'user', content: command });
+    const fullCommand = activeFileContent
+      ? `الملف الحالي المفتوح: ${activeFile}\n\`\`\`\n${activeFileContent.slice(0, 3000)}\n\`\`\`\n\nطلب المستخدم: ${command}`
+      : command;
+    sessions[sessionId].push({ role: 'user', content: fullCommand });
 
     // الاحتفاظ بآخر 20 رسالة فقط لتجنب تجاوز الحد
     if (sessions[sessionId].length > 20) {
