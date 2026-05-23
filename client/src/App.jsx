@@ -138,6 +138,8 @@ export default function App() {
   const [terminalHeight, setTerminalHeight] = useState(180);
   const [activeActivity, setActiveActivity] = useState('explorer');
   const [projectName, setProjectName] = useState('أخطبوط');
+  const [isRunning, setIsRunning] = useState(false);
+  const [runProcess, setRunProcess] = useState(null);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const t = THEMES[theme];
@@ -197,6 +199,48 @@ export default function App() {
       const data = await res.json();
       setTerminalHistory(prev => [...prev, { type: data.success ? 'output' : 'error', text: data.output || data.error || '' }]);
     } catch { setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ تعذّر تشغيل الأمر' }]); }
+  }
+
+  async function toggleRun() {
+    if (isRunning) {
+      const res = await fetch(`${BACKEND}/api/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      setIsRunning(false);
+      setRunProcess(null);
+      setTerminalHistory(prev => [...prev, { type: 'system', text: data.output }]);
+      return;
+    }
+
+    setIsRunning(true);
+    setTerminalOpen(true);
+    setTerminalTab('terminal');
+
+    // اكتشاف نوع المشروع تلقائياً
+    let command = 'npm run dev';
+    const fileNames = fileTree.map(f => f.name);
+    if (fileNames.includes('artisan')) command = 'php artisan serve';
+    else if (fileNames.includes('manage.py')) command = 'python manage.py runserver';
+
+    setRunProcess(command);
+    setTerminalHistory(prev => [...prev, { type: 'system', text: `🚀 تشغيل: ${command}` }]);
+
+    try {
+      const res = await fetch(`${BACKEND}/api/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command, cwd: currentDir }),
+      });
+      const data = await res.json();
+      setTerminalHistory(prev => [...prev, { type: 'output', text: data.output }]);
+    } catch {
+      setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ خطأ في التشغيل' }]);
+      setIsRunning(false);
+      setRunProcess(null);
+    }
   }
 
   function activateLeg(id, task) {
@@ -540,6 +584,18 @@ export default function App() {
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', gap: 4 }}>
           <i className="codicon codicon-source-control" style={{ fontSize: 12 }} /> main
         </span>
+        <button
+          onClick={toggleRun}
+          style={{
+            background: isRunning ? '#da3633' : '#2ea043',
+            border: 'none', borderRadius: 4, cursor: 'pointer',
+            color: '#fff', padding: '1px 8px', fontSize: 11,
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}
+        >
+          <i className={`codicon ${isRunning ? 'codicon-stop-circle' : 'codicon-play'}`} style={{ fontSize: 12 }} />
+          {isRunning ? 'إيقاف' : 'تشغيل'}
+        </button>
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>🐙 أخطبوط AI</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>

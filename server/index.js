@@ -5,7 +5,7 @@ const Groq = require('groq-sdk');
 const fs = require('fs');
 const path = require('path');
 const pathModule = require('path');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -16,6 +16,7 @@ app.use(express.json());
 
 // تخزين تاريخ المحادثات لكل جلسة
 const sessions = {};
+let runningProcess = null;
 
 const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء وتعديل المشاريع البرمجية الكاملة.
 
@@ -168,13 +169,10 @@ app.post('/api/files/list', async (req, res) => {
 app.post('/api/terminal', async (req, res) => {
   try {
     const { command, cwd } = req.body;
-
-    // أوامر ممنوعة للأمان
-    const blocked = ['rm -rf', 'del /f', 'format', 'shutdown', 'reboot'];
+    const blocked = ['rm -rf', 'del /f /s', 'format', 'shutdown', 'reboot'];
     if (blocked.some(b => command.toLowerCase().includes(b))) {
-      return res.json({ success: false, error: 'هذا الأمر ممنوع لأسباب أمنية' });
+      return res.json({ success: false, error: 'هذا الأمر ممنوع' });
     }
-
     exec(command, { cwd: cwd || process.cwd(), timeout: 30000 }, (error, stdout, stderr) => {
       res.json({
         success: !error,
@@ -182,6 +180,53 @@ app.post('/api/terminal', async (req, res) => {
         error: error ? error.message : null
       });
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// تشغيل عملية طويلة
+app.post('/api/run', async (req, res) => {
+  try {
+    const { command, cwd } = req.body;
+
+    if (runningProcess) {
+      runningProcess.kill('SIGTERM');
+      runningProcess = null;
+    }
+
+    const parts = command.split(' ');
+    runningProcess = spawn(parts[0], parts.slice(1), {
+      cwd: cwd || process.cwd(),
+      shell: true,
+      env: { ...process.env }
+    });
+
+    let output = '';
+    runningProcess.stdout.on('data', d => { output += d.toString(); });
+    runningProcess.stderr.on('data', d => { output += d.toString(); });
+    runningProcess.on('exit', () => { runningProcess = null; });
+
+    // أرجع response بعد ثانيتين
+    setTimeout(() => {
+      res.json({ success: true, output: output || '✅ العملية شغّالة في الخلفية', pid: runningProcess?.pid });
+    }, 2000);
+
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// إيقاف العملية
+app.post('/api/stop', async (req, res) => {
+  try {
+    if (runningProcess) {
+      runningProcess.kill('SIGTERM');
+      runningProcess = null;
+      res.json({ success: true, output: '⏹ تم الإيقاف' });
+    } else {
+      res.json({ success: true, output: 'لا توجد عملية شغّالة' });
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
