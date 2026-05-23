@@ -5,6 +5,7 @@ const Groq = require('groq-sdk');
 const fs = require('fs');
 const path = require('path');
 const pathModule = require('path');
+const { exec } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -153,6 +154,28 @@ app.post('/api/files/list', async (req, res) => {
 
     const items = readDir(fullPath);
     res.json({ success: true, items });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/terminal', async (req, res) => {
+  try {
+    const { command, cwd } = req.body;
+
+    // أوامر ممنوعة للأمان
+    const blocked = ['rm -rf', 'del /f', 'format', 'shutdown', 'reboot'];
+    if (blocked.some(b => command.toLowerCase().includes(b))) {
+      return res.json({ success: false, error: 'هذا الأمر ممنوع لأسباب أمنية' });
+    }
+
+    exec(command, { cwd: cwd || process.cwd(), timeout: 30000 }, (error, stdout, stderr) => {
+      res.json({
+        success: !error,
+        output: stdout || stderr || error?.message || '',
+        error: error ? error.message : null
+      });
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

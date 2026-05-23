@@ -156,11 +156,22 @@ export default function App() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalHistory, setTerminalHistory] = useState([
+    { type: 'system', text: '🐙 Terminal أخطبوط جاهز' }
+  ]);
+  const [terminalInput, setTerminalInput] = useState('');
+  const [currentDir, setCurrentDir] = useState('');
   const bottomRef = useRef(null);
+  const terminalBottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    terminalBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [terminalHistory]);
 
   async function onFileClick(item) {
     setActiveFile(item.name);
@@ -187,6 +198,7 @@ export default function App() {
     if (!window.octopus) return;
     const folderPath = await window.octopus.openFolder();
     if (!folderPath) return;
+    setCurrentDir(folderPath);
     const res = await fetch(`${BACKEND}/api/files/list`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -196,6 +208,26 @@ export default function App() {
     if (data.success) {
       setFileTree(data.items);
       setFiles([]);
+    }
+  }
+
+  async function runCommand(cmd) {
+    if (!cmd.trim()) return;
+    setTerminalHistory(prev => [...prev, { type: 'input', text: `$ ${cmd}` }]);
+    setTerminalInput('');
+    try {
+      const res = await fetch(`${BACKEND}/api/terminal`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, cwd: currentDir }),
+      });
+      const data = await res.json();
+      setTerminalHistory(prev => [...prev, {
+        type: data.success ? 'output' : 'error',
+        text: data.output || data.error || ''
+      }]);
+    } catch {
+      setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ تعذّر تشغيل الأمر' }]);
     }
   }
 
@@ -328,9 +360,11 @@ export default function App() {
           </span>
         </div>
         <button style={s.headerBtn} onClick={openFolder}>📁 فتح مجلد</button>
+        <button style={s.headerBtn} onClick={() => setTerminalOpen(p => !p)}>⚡ Terminal</button>
         <button style={s.headerBtn} onClick={reset}>🗑 مسح</button>
       </div>
 
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={s.main}>
         <div style={s.sidebar}>
           <div style={s.sidebarHeader}>
@@ -442,6 +476,39 @@ export default function App() {
         </div>
       </div>
 
+      {terminalOpen && (
+        <div style={s.terminal}>
+          <div style={s.terminalHeader}>
+            <span style={{ fontSize: 12, color: '#7dd3fc' }}>⚡ Terminal</span>
+            <span style={{ fontSize: 11, color: '#6e7681', flex: 1, marginRight: 8 }}>{currentDir}</span>
+            <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer', fontSize: 14 }} onClick={() => setTerminalHistory([{ type: 'system', text: '🐙 Terminal أخطبوط جاهز' }])}>🗑</button>
+            <button style={{ background: 'transparent', border: 'none', color: '#6e7681', cursor: 'pointer', fontSize: 14 }} onClick={() => setTerminalOpen(false)}>✕</button>
+          </div>
+          <div style={s.terminalBody}>
+            {terminalHistory.map((h, i) => (
+              <div key={i} style={{
+                fontSize: 12, fontFamily: 'JetBrains Mono, Consolas, monospace',
+                color: h.type === 'input' ? '#7dd3fc' : h.type === 'error' ? '#ff7b72' : h.type === 'system' ? '#7ee787' : '#c9d1d9',
+                lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+              }}>{h.text}</div>
+            ))}
+            <div ref={terminalBottomRef} />
+          </div>
+          <div style={s.terminalInput}>
+            <span style={{ color: '#7dd3fc', fontFamily: 'monospace', fontSize: 13 }}>$</span>
+            <input
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#e6edf3', fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 13 }}
+              value={terminalInput}
+              onChange={e => setTerminalInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') runCommand(terminalInput); }}
+              placeholder="اكتب أمراً..."
+              dir="ltr"
+              autoFocus
+            />
+          </div>
+        </div>
+      )}
+
       <div style={s.commandBar}>
         <textarea
           style={s.commandInput}
@@ -455,6 +522,7 @@ export default function App() {
         <button style={s.sendBtn} onClick={send} disabled={loading}>
           {loading ? "⏳" : "إرسال ➤"}
         </button>
+      </div>
       </div>
     </div>
   );
@@ -483,6 +551,10 @@ const s = {
   progressBar: { background: "#21262d", borderRadius: 3, height: 3 },
   progressFill: (progress, status) => ({ background: status === "done" ? "#3fb950" : "#f0883e", width: `${progress}%`, height: "100%", borderRadius: 3, transition: "width 0.2s ease" }),
   chatArea: { flex: 1, overflowY: "auto", padding: 10, borderTop: "0.5px solid #30363d" },
+  terminal: { height: 200, background: '#0d1117', borderTop: '0.5px solid #30363d', display: 'flex', flexDirection: 'column', flexShrink: 0 },
+  terminalHeader: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: '0.5px solid #30363d', background: '#161b22' },
+  terminalBody: { flex: 1, overflowY: 'auto', padding: '8px 12px' },
+  terminalInput: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderTop: '0.5px solid #30363d' },
   commandBar: { display: "flex", gap: 8, padding: "10px 12px", background: "#161b22", borderTop: "0.5px solid #30363d", flexShrink: 0 },
   commandInput: { flex: 1, background: "#0d1117", color: "#e6edf3", border: "0.5px solid #30363d", borderRadius: 8, padding: "8px 12px", fontSize: 13, resize: "none", outline: "none", fontFamily: "'IBM Plex Sans Arabic', sans-serif" },
   sendBtn: { background: "#1f6feb", color: "#fff", border: "none", borderRadius: 8, padding: "0 16px", fontSize: 13, cursor: "pointer", fontWeight: 500, whiteSpace: "nowrap" },
