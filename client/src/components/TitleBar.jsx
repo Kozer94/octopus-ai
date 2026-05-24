@@ -52,10 +52,10 @@ export function TitleBar({
                   ? <div key={i} style={{ height: 1, background: t.border, margin: '4px 8px' }} />
                   : (
                     <div key={i}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', cursor: 'pointer', borderRadius: 0 }}
-                      onMouseEnter={e => e.currentTarget.style.background = t.accent + '22'}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', cursor: item.disabled ? 'default' : 'pointer', borderRadius: 0, opacity: item.disabled ? 0.45 : 1 }}
+                      onMouseEnter={e => { if (!item.disabled) e.currentTarget.style.background = t.accent + '22'; }}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                      onClick={() => { item.action(); setMenuOpen(null); }}
+                      onClick={() => { if (item.disabled) return; item.action(); setMenuOpen(null); }}
                     >
                       <i className={`codicon ${item.icon}`} style={{ color: t.accent, fontSize: 14, flexShrink: 0, width: 16 }} />
                       <span style={{ fontSize: 12, color: t.text, flex: 1 }}>{item.label}</span>

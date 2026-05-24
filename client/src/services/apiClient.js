@@ -23,6 +23,7 @@ export async function getJson(path) {
 export const filesApi = {
   list: dirPath => postJson('/api/files/list', { dirPath }),
   read: ({ filePath, projectDir }) => postJson('/api/files/read', { filePath, projectDir }),
+  showInExplorer: filePath => postJson('/api/files/show-in-explorer', { filePath }),
   write: ({ filePath, content, projectDir }) => postJson('/api/files/write', { filePath, content, projectDir }),
 };
 

@@ -20,7 +20,7 @@ import { useAppShortcuts } from './hooks/useAppShortcuts';
 import { useOctopusWorkflow } from './hooks/useOctopusWorkflow';
 import { useTerminalApprovals } from './hooks/useTerminalApprovals';
 import { extensionsApi, filesApi, gitApi, terminalApi, workspaceApi } from './services/apiClient';
-import { INITIAL_CHAT_MESSAGES, OCTOPUS_ABOUT_MESSAGE } from './utils/chatMessages';
+import { INITIAL_CHAT_MESSAGES, OCTOPUS_ABOUT_MESSAGE, octopusMessage } from './utils/chatMessages';
 import { buildLineDiff, getSavedFileName } from './utils/diffUtils';
 import { applyDiffDecorations as decorateEditorDiff, clearDiffDecorations } from './utils/editorDiffDecorations';
 import { advanceLegProgress, finishLeg, resetLegState, startLeg } from './utils/legState';
@@ -168,15 +168,7 @@ export default function App() {
     }
   }
 
-  async function toggleRun() {
-    if (isRunning) {
-      const data = await terminalApi.stop();
-      setIsRunning(false);
-      setRunProcess(null);
-      setTerminalHistory(prev => [...prev, terminalSystemEntry(data.output)]);
-      return;
-    }
-
+  async function startProject() {
     setIsRunning(true);
     setTerminalOpen(true);
     setTerminalTab('terminal');
@@ -194,6 +186,27 @@ export default function App() {
       setIsRunning(false);
       setRunProcess(null);
     }
+  }
+
+  async function stopProject() {
+    const data = await terminalApi.stop();
+    setIsRunning(false);
+    setRunProcess(null);
+    setTerminalHistory(prev => [...prev, terminalSystemEntry(data.output)]);
+  }
+
+  async function toggleRun() {
+    if (isRunning) {
+      await stopProject();
+      return;
+    }
+
+    await startProject();
+  }
+
+  async function restartProject() {
+    if (isRunning) await stopProject();
+    await startProject();
   }
 
   async function doSearch(q) {
@@ -328,6 +341,73 @@ export default function App() {
     if (name) setFiles(prev => [...prev, { name, content: "" }]);
     setActiveFile(name || '');
   };
+  const appendOctopusMessage = (text) => setMessages(prev => [...prev, octopusMessage(text)]);
+  const activateSidebarPanel = (activityId) => {
+    setActiveActivity(activityId);
+    setSidebarOpen(true);
+  };
+  const activateRightPanel = (tab) => {
+    setRightPanelTab(tab);
+    setRightPanelOpen(true);
+  };
+  const openTerminalTab = (tab = 'terminal') => {
+    setTerminalOpen(true);
+    setTerminalTab(tab);
+  };
+  const saveCurrentFile = async () => {
+    if (currentFile?.path && currentFile.content !== undefined) {
+      await filesApi.write({ filePath: currentFile.path, content: currentFile.content });
+      appendOctopusMessage(`Saved ${displayFilePath(currentFile)}`);
+    }
+  };
+  const saveAllOpenFiles = async () => {
+    const writableFiles = files.filter(file => file.path && file.content !== undefined);
+    await Promise.all(writableFiles.map(file => filesApi.write({ filePath: file.path, content: file.content })));
+    appendOctopusMessage(`Saved ${writableFiles.length} open file${writableFiles.length === 1 ? '' : 's'}`);
+  };
+  const closeActiveFile = () => {
+    if (!activeFile) return;
+    const remaining = files.filter(file => file.name !== activeFile);
+    setFiles(remaining);
+    setActiveFile(remaining.at(-1)?.name || '');
+  };
+  const closeAllFiles = () => {
+    setFiles([]);
+    setActiveFile('');
+  };
+  const copyCurrentFilePath = async () => {
+    const filePath = currentFile?.path || activeFile;
+    if (!filePath) return;
+    await navigator.clipboard?.writeText(filePath);
+    appendOctopusMessage(`Copied path: ${filePath}`);
+  };
+  const resetLayout = () => {
+    setSidebarOpen(true);
+    setRightPanelOpen(true);
+    setTerminalOpen(false);
+    setSidebarWidth(220);
+    setRightPanelWidth(260);
+    setTerminalHeight(180);
+    setActiveActivity('explorer');
+    setRightPanelTab('chat');
+  };
+  const showStatusSummary = () => {
+    appendOctopusMessage(`Status: ${files.length} open file(s), ${gitFiles.length} git item(s), ${installedExtensions.length} extension(s).`);
+  };
+  const findTreeItemByName = (items, name) => {
+    for (const item of items) {
+      if (item.name === name) return item;
+      const childMatch = item.children ? findTreeItemByName(item.children, name) : null;
+      if (childMatch) return childMatch;
+    }
+    return null;
+  };
+  const openProjectFileByName = (name) => {
+    activateSidebarPanel('explorer');
+    const item = findTreeItemByName(fileTree, name);
+    if (item) onFileClick(item);
+    else setActiveFile(name);
+  };
 
   async function searchExtensions(query) {
     if (!query.trim()) {
@@ -383,7 +463,13 @@ export default function App() {
         { label: 'Open Folder...', icon: 'codicon-folder-opened', action: () => openFolder(), shortcut: 'Ctrl+O' },
         { label: 'New File', icon: 'codicon-new-file', action: createScratchFile, shortcut: 'Ctrl+N' },
         { separator: true },
-        { label: 'Save', icon: 'codicon-save', action: async () => { const cf = files.find(f => f.name === activeFile); if (cf?.path && cf.content !== undefined) { await filesApi.write({ filePath: cf.path, content: cf.content }); } }, shortcut: 'Ctrl+S' },
+        { label: 'Save', icon: 'codicon-save', action: saveCurrentFile, shortcut: 'Ctrl+S', disabled: !currentFile?.path },
+        { label: 'Save All', icon: 'codicon-save-all', action: saveAllOpenFiles, shortcut: 'Ctrl+K S', disabled: !files.some(file => file.path && file.content !== undefined) },
+        { separator: true },
+        { label: 'Close File', icon: 'codicon-close', action: closeActiveFile, shortcut: 'Ctrl+W', disabled: !activeFile },
+        { label: 'Close All Files', icon: 'codicon-close-all', action: closeAllFiles, disabled: files.length === 0 },
+        { separator: true },
+        { label: 'Refresh Explorer', icon: 'codicon-refresh', action: refreshFileTree, disabled: !currentDir },
         { separator: true },
         { label: 'Reset Conversation', icon: 'codicon-refresh', action: () => reset() },
       ]
@@ -391,10 +477,15 @@ export default function App() {
     {
       id: 'edit', label: 'Edit',
       items: [
-        { label: 'Search in Files', icon: 'codicon-search', action: () => { setActiveActivity('search'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+F' },
-        { label: 'File Explorer', icon: 'codicon-files', action: () => { setActiveActivity('explorer'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+E' },
+        { label: 'Search in Files', icon: 'codicon-search', action: () => activateSidebarPanel('search'), shortcut: 'Ctrl+Shift+F' },
+        { label: 'Focus Quick Search', icon: 'codicon-search-fuzzy', action: () => { searchInputRef.current?.focus(); searchInputRef.current?.select(); }, shortcut: 'Ctrl+P' },
+        { label: 'Clear Search', icon: 'codicon-clear-all', action: () => { setSearchQuery(''); setSearchResults([]); }, disabled: !searchQuery && searchResults.length === 0 },
         { separator: true },
-        { label: 'Git', icon: 'codicon-source-control', action: () => { setActiveActivity('git'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+G' },
+        { label: 'Copy Current Path', icon: 'codicon-copy', action: copyCurrentFilePath, disabled: !activeFile && !currentFile?.path },
+        { label: 'Open Current in Explorer', icon: 'codicon-go-to-file', action: () => currentFile?.path && filesApi.showInExplorer(currentFile.path), disabled: !currentFile?.path },
+        { separator: true },
+        { label: 'File Explorer', icon: 'codicon-files', action: () => activateSidebarPanel('explorer'), shortcut: 'Ctrl+Shift+E' },
+        { label: 'Git', icon: 'codicon-source-control', action: () => activateSidebarPanel('git'), shortcut: 'Ctrl+Shift+G' },
       ]
     },
     {
@@ -403,6 +494,18 @@ export default function App() {
         { label: sidebarOpen ? 'Hide Sidebar' : 'Show Sidebar', icon: 'codicon-layout-sidebar-left', action: () => setSidebarOpen(p => !p), shortcut: 'Ctrl+B' },
         { label: terminalOpen ? 'Hide Terminal' : 'Show Terminal', icon: 'codicon-terminal', action: () => setTerminalOpen(p => !p), shortcut: 'Ctrl+`' },
         { label: rightPanelOpen ? 'Hide Chat Panel' : 'Show Chat Panel', icon: 'codicon-comment-discussion', action: () => setRightPanelOpen(p => !p) },
+        { separator: true },
+        { label: 'Explorer', icon: 'codicon-files', action: () => activateSidebarPanel('explorer') },
+        { label: 'Search', icon: 'codicon-search', action: () => activateSidebarPanel('search') },
+        { label: 'Source Control', icon: 'codicon-source-control', action: () => activateSidebarPanel('git') },
+        { label: 'Extensions', icon: 'codicon-extensions', action: () => activateSidebarPanel('extensions') },
+        { separator: true },
+        { label: 'Chat', icon: 'codicon-comment-discussion', action: () => activateRightPanel('chat') },
+        { label: 'Eight Legs', icon: 'codicon-pulse', action: () => activateRightPanel('legs') },
+        { label: 'Context', icon: 'codicon-list-tree', action: () => activateRightPanel('context') },
+        { label: 'History', icon: 'codicon-history', action: () => activateRightPanel('history') },
+        { separator: true },
+        { label: 'Reset Layout', icon: 'codicon-layout', action: resetLayout },
         { separator: true },
         ...Object.entries(THEMES).map(([key, th]) => ({
           label: th.name,
@@ -415,15 +518,25 @@ export default function App() {
       id: 'run', label: 'Run',
       items: [
         { label: isRunning ? 'Stop Project' : 'Run Project', icon: isRunning ? 'codicon-debug-stop' : 'codicon-play', action: () => { toggleRun(); }, shortcut: 'F5' },
+        { label: 'Restart Project', icon: 'codicon-debug-restart', action: restartProject, disabled: !currentDir },
         { separator: true },
-        { label: 'Open Terminal', icon: 'codicon-terminal', action: () => { setTerminalOpen(true); setTerminalTab('terminal'); } },
+        { label: 'Open Terminal', icon: 'codicon-terminal', action: () => openTerminalTab('terminal') },
+        { label: 'Show Problems', icon: 'codicon-warning', action: () => openTerminalTab('problems') },
+        { label: 'Show Output', icon: 'codicon-output', action: () => openTerminalTab('output') },
+        { separator: true },
+        { label: 'Refresh Git Status', icon: 'codicon-sync', action: loadGitStatus, disabled: !currentDir },
+        { label: 'Commit Changes', icon: 'codicon-check', action: doCommit, disabled: !commitMsg.trim() || gitFiles.length === 0 },
       ]
     },
     {
       id: 'help', label: 'Help',
       items: [
         { label: 'About Octopus', icon: 'codicon-info', action: () => setMessages(prev => [...prev, OCTOPUS_ABOUT_MESSAGE]) },
-        { label: 'Extensions', icon: 'codicon-extensions', action: () => { setActiveActivity('extensions'); setSidebarOpen(true); } },
+        { label: 'Project Status', icon: 'codicon-dashboard', action: showStatusSummary },
+        { separator: true },
+        { label: 'Extensions', icon: 'codicon-extensions', action: () => activateSidebarPanel('extensions') },
+        { label: 'Open Report', icon: 'codicon-book', action: () => openProjectFileByName('REPORT.md') },
+        { label: 'Open TODO', icon: 'codicon-checklist', action: () => openProjectFileByName('TODO.md') },
       ]
     },
   ];
