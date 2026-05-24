@@ -15,14 +15,14 @@ const THEMES = {
 };
 
 const INITIAL_LEGS = [
-  { id: 1, name: "رجل الكتابة", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 2, name: "رجل الفحص", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 3, name: "رجل التعديل", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 4, name: "رجل الاختبار", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 5, name: "رجل الإدارة", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 6, name: "رجل التوليد", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 7, name: "رجل التحديث", status: "idle", task: "تنتظر...", progress: 0 },
-  { id: 8, name: "رجل الدمج", status: "idle", task: "تنتظر...", progress: 0 },
+  { id: 1, name: "Writer Leg",   status: "idle", task: "Waiting...", progress: 0 },
+  { id: 2, name: "Review Leg",   status: "idle", task: "Waiting...", progress: 0 },
+  { id: 3, name: "Edit Leg",     status: "idle", task: "Waiting...", progress: 0 },
+  { id: 4, name: "Test Leg",     status: "idle", task: "Waiting...", progress: 0 },
+  { id: 5, name: "Manager Leg",  status: "idle", task: "Waiting...", progress: 0 },
+  { id: 6, name: "Generate Leg", status: "idle", task: "Waiting...", progress: 0 },
+  { id: 7, name: "Update Leg",   status: "idle", task: "Waiting...", progress: 0 },
+  { id: 8, name: "Merge Leg",    status: "idle", task: "Waiting...", progress: 0 },
 ];
 
 function getFileIcon(name) {
@@ -190,7 +190,7 @@ function OctopusWorking({ active, legs }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f0883e', animation: 'octopusTyping 0.8s infinite' }} />
-          <span style={{ fontSize: 12, color: '#7dd3fc', fontWeight: 500 }}>أخطبوط يعمل...</span>
+          <span style={{ fontSize: 12, color: '#7dd3fc', fontWeight: 500 }}>Octopus working...</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {workingLegs.map((leg, i) => (
@@ -250,20 +250,20 @@ export default function App() {
   const [fileTree, setFileTree] = useState([]);
   const [activeFile, setActiveFile] = useState("");
   const [legs, setLegs] = useState(INITIAL_LEGS);
-  const [messages, setMessages] = useState([{ role: "octopus", text: "مرحباً 🐙 أنا جاهز. أخبرني ماذا تريد أن تبني." }]);
+  const [messages, setMessages] = useState([{ role: "octopus", text: "Hello 🐙 I'm ready. Tell me what you want to build." }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [themeOpen, setThemeOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalHistory, setTerminalHistory] = useState([{ type: 'system', text: '🐙 Terminal جاهز' }]);
+  const [terminalHistory, setTerminalHistory] = useState([{ type: 'system', text: '🐙 Terminal ready' }]);
   const [terminalInput, setTerminalInput] = useState('');
   const [terminalTab, setTerminalTab] = useState('terminal');
   const [currentDir, setCurrentDir] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [terminalHeight, setTerminalHeight] = useState(180);
   const [activeActivity, setActiveActivity] = useState('explorer');
-  const [projectName, setProjectName] = useState('أخطبوط');
+  const [projectName, setProjectName] = useState('Octopus');
   const [isRunning, setIsRunning] = useState(false);
   const [runProcess, setRunProcess] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -276,17 +276,42 @@ export default function App() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [pendingPlan, setPendingPlan] = useState(null);
   const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(null); // 'file' | 'edit' | 'view' | 'run' | 'help' | null
   const [extSearchQuery, setExtSearchQuery] = useState('');
   const [extSearchResults, setExtSearchResults] = useState([]);
   const [extSearching, setExtSearching] = useState(false);
   const [installedExtensions, setInstalledExtensions] = useState([]);
   const [selectedExtension, setSelectedExtension] = useState(null);
+  const [rightPanelTab, setRightPanelTab] = useState('chat');
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
+  const searchInputRef = useRef(null);
   const t = THEMES[theme];
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { terminalBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [terminalHistory]);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        setSidebarOpen(p => !p);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === '`') {
+        e.preventDefault();
+        setTerminalOpen(p => !p);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   function startSidebarResize(e) {
     e.preventDefault();
@@ -405,7 +430,7 @@ export default function App() {
     else if (fileNames.includes('manage.py')) command = 'python manage.py runserver';
 
     setRunProcess(command);
-    setTerminalHistory(prev => [...prev, { type: 'system', text: `🚀 تشغيل: ${command}` }]);
+    setTerminalHistory(prev => [...prev, { type: 'system', text: `🚀 Running: ${command}` }]);
 
     try {
       const res = await fetch(`${BACKEND}/api/run`, {
@@ -416,7 +441,7 @@ export default function App() {
       const data = await res.json();
       setTerminalHistory(prev => [...prev, { type: 'output', text: data.output }]);
     } catch {
-      setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ خطأ في التشغيل' }]);
+      setTerminalHistory(prev => [...prev, { type: 'error', text: '⚠️ Run error' }]);
       setIsRunning(false);
       setRunProcess(null);
     }
@@ -481,7 +506,7 @@ export default function App() {
     const text = input.trim();
     if (!text || loading) return;
     if (awaitingConfirm) {
-      setMessages(prev => [...prev, { role: "octopus", text: "⏳ انتظر — يجب تأكيد الخطة الحالية أو إلغاؤها أولاً." }]);
+      setMessages(prev => [...prev, { role: "octopus", text: "⏳ Please confirm or cancel the current plan first." }]);
       return;
     }
     setInput("");
@@ -495,10 +520,11 @@ export default function App() {
       .map(f => `### ${f.name}:\n\`\`\`\n${f.content?.slice(0, 500)}\n\`\`\``)
       .join('\n\n');
 
-    const isComplexTask = text.length > 20;
+    const isReportRequest = /فحص|تقرير|تقريري|حلل|تحليل|وثق|توثيق|ملخص|ملخّص|report|analyze|analysis|documentation|markdown|\bmd\b/i.test(text);
+    const isComplexTask = text.length > 20 || isReportRequest;
 
     if (!isComplexTask) {
-      activateLeg(1, "تحلل الطلب...");
+      activateLeg(1, "Analyzing request...");
       const currentFile = files.find(f => f.name === activeFile);
       try {
         const res = await fetch(`${BACKEND}/api/octopus`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "", projectContext: openFilesContext, projectDir: currentDir }) });
@@ -511,16 +537,16 @@ export default function App() {
           if (code) setFiles(prev => { const exists = prev.find(f => f.name === activeFile); if (exists) return prev.map(f => f.name === activeFile ? { ...f, content: code } : f); return [...prev, { name: activeFile, content: code }]; });
           completeLeg(1);
           setMessages(prev => [...prev, { role: "octopus", text: data.result }]);
-        } else { setMessages(prev => [...prev, { role: "octopus", text: `خطأ: ${data.error}` }]); resetLegs(); }
-      } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
+        } else { setMessages(prev => [...prev, { role: "octopus", text: `Error: ${data.error}` }]); resetLegs(); }
+      } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ Could not connect to server." }]); resetLegs(); }
       setLoading(false);
       return;
     }
 
-    // المهام المعقدة: preview أولاً قبل التنفيذ
-    activateLeg(1, "يفحص المشروع...");
-    activateLeg(2, "يضع الخطة...");
-    setMessages(prev => [...prev, { role: "octopus", text: "🔍 أخطبوط يفحص المشروع ويضع خطة التنفيذ..." }]);
+    // Complex tasks: preview first before execution
+    activateLeg(1, "Scanning project...");
+    activateLeg(2, "Planning tasks...");
+    setMessages(prev => [...prev, { role: "octopus", text: "🔍 Octopus is scanning the project and building an execution plan..." }]);
 
     try {
       const res = await fetch(`${BACKEND}/api/octopus/preview`, {
@@ -535,10 +561,10 @@ export default function App() {
         setPendingPlan({ plan: data.plan, command: text, openFilesContext });
         setAwaitingConfirm(true);
       } else {
-        setMessages(prev => [...prev, { role: "octopus", text: `خطأ في الفحص: ${data.error}` }]);
+        setMessages(prev => [...prev, { role: "octopus", text: `Scan error: ${data.error}` }]);
         resetLegs();
       }
-    } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
+    } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ Could not connect to server." }]); resetLegs(); }
     setLoading(false);
   }
 
@@ -554,7 +580,7 @@ export default function App() {
     if (plan && plan.tasks) {
       plan.tasks.forEach(task => activateLeg(task.leg, task.task));
     } else {
-      activateLeg(1, "تكتب الكود..."); activateLeg(2, "تفحص...");
+      activateLeg(1, "Writing code..."); activateLeg(2, "Reviewing...");
     }
 
     try {
@@ -568,14 +594,28 @@ export default function App() {
       if (data.terminalCommand) { setTerminalOpen(true); await runCommand(data.terminalCommand); }
 
       if (data.savedFiles && data.savedFiles.length > 0) {
+        let lastOpenedFile = null;
         for (const file of data.savedFiles) {
-          const res2 = await fetch(`${BACKEND}/api/files/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: file.path }) });
+          // استخدام relativePath للقراءة مع projectDir
+          const readPath = file.relativePath || file.path;
+          const res2 = await fetch(`${BACKEND}/api/files/read`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filePath: readPath, projectDir: currentDir }),
+          });
           const fileData = await res2.json();
           if (fileData.success) {
-            setFiles(prev => { const exists = prev.find(f => f.path === file.path); if (exists) return prev.map(f => f.path === file.path ? { ...f, content: fileData.content } : f); return [...prev, { name: file.name, path: file.path, content: fileData.content }]; });
-            setActiveFile(file.name);
+            const fileName = file.name || readPath.split('/').pop().split('\\').pop();
+            setFiles(prev => {
+              const exists = prev.find(f => f.path === file.path || f.name === fileName);
+              if (exists) return prev.map(f => (f.path === file.path || f.name === fileName) ? { ...f, name: fileName, path: file.path, content: fileData.content } : f);
+              return [...prev, { name: fileName, path: file.path, content: fileData.content }];
+            });
+            lastOpenedFile = fileName;
           }
         }
+        // فتح آخر ملف كتبه AI في المحرر تلقائياً
+        if (lastOpenedFile) setActiveFile(lastOpenedFile);
         if (currentDir) {
           fetch(`${BACKEND}/api/files/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dirPath: currentDir }) })
             .then(r => r.json()).then(d => { if (d.success) setFileTree(d.items); });
@@ -594,13 +634,13 @@ export default function App() {
           legs.forEach(l => completeLeg(l.id));
           setMessages(prev => [...prev, { role: "octopus", text: data.result }]);
         }, 800);
-      } else { setMessages(prev => [...prev, { role: "octopus", text: `خطأ: ${data.error}` }]); resetLegs(); }
-    } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
+      } else { setMessages(prev => [...prev, { role: "octopus", text: `Error: ${data.error}` }]); resetLegs(); }
+    } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ Could not connect to server." }]); resetLegs(); }
     setLoading(false);
   }
 
   function cancelPlan() {
-    setMessages(prev => [...prev, { role: "octopus", text: "تم الإلغاء 🐙" }]);
+    setMessages(prev => [...prev, { role: "octopus", text: "Cancelled 🐙" }]);
     setPendingPlan(null);
     setAwaitingConfirm(false);
     resetLegs();
@@ -608,7 +648,7 @@ export default function App() {
 
   async function reset() {
     await fetch(`${BACKEND}/api/reset`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sessionId: SESSION_ID }) });
-    setMessages([{ role: "octopus", text: "تم مسح المحادثة 🐙" }]);
+    setMessages([{ role: "octopus", text: "Conversation cleared 🐙" }]);
   }
 
   function onKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }
@@ -669,41 +709,165 @@ export default function App() {
   }
 
   const activityItems = [
-    { id: 'explorer', icon: 'codicon-files', title: 'مستكشف الملفات' },
-    { id: 'search', icon: 'codicon-search', title: 'بحث' },
-    { id: 'git', icon: 'codicon-source-control', title: 'Git' },
-    { id: 'extensions', icon: 'codicon-extensions', title: 'إضافات' },
+    { id: 'explorer',   icon: 'codicon-files',          title: 'Explorer' },
+    { id: 'search',     icon: 'codicon-search',          title: 'Search' },
+    { id: 'git',        icon: 'codicon-source-control',  title: 'Git' },
+    { id: 'extensions', icon: 'codicon-extensions',      title: 'Extensions' },
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: t.bg, color: t.text, fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: t.bg, color: t.text, fontFamily: "'Inter', 'Segoe UI', sans-serif" }} onClick={() => menuOpen && setMenuOpen(null)}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${t.border}; border-radius: 2px; }
       `}</style>
 
-      {/* Title Bar */}
-      <div style={{ display: "flex", alignItems: "center", padding: "0 12px", height: 35, background: t.activityBar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, gap: 10 }}>
-        <span style={{ fontSize: 18 }}>🐙</span>
-        <span style={{ fontSize: 13, fontWeight: 500, color: t.accent }}>أخطبوط</span>
+      {/* Title + Menu Bar (merged) */}
+      <div
+        style={{ display: "flex", alignItems: "center", height: 36, background: t.activityBar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, padding: "0 10px", gap: 0, position: 'relative', zIndex: 200 }}
+        onClick={() => { if (menuOpen) setMenuOpen(null); }}
+      >
+        {/* Logo */}
+        <span style={{ fontSize: 17, marginRight: 6, lineHeight: 1 }}>🐙</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: t.accent, marginRight: 12, whiteSpace: 'nowrap' }}>Octopus AI</span>
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 16, background: t.border, marginRight: 8, flexShrink: 0 }} />
+
+        {/* Menu Items */}
+        {[
+          {
+            id: 'file', label: 'File',
+            items: [
+              { label: 'Open Folder...', icon: 'codicon-folder-opened', action: () => openFolder(), shortcut: 'Ctrl+O' },
+              { label: 'New File', icon: 'codicon-new-file', action: () => { const name = prompt("File name:"); if (name) setFiles(prev => [...prev, { name, content: "" }]); setActiveFile(name || ''); }, shortcut: 'Ctrl+N' },
+              { separator: true },
+              { label: 'Save', icon: 'codicon-save', action: async () => { const cf = files.find(f => f.name === activeFile); if (cf?.path && cf.content !== undefined) { await fetch(`${BACKEND}/api/files/write`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: cf.path, content: cf.content }) }); } }, shortcut: 'Ctrl+S' },
+              { separator: true },
+              { label: 'Reset Conversation', icon: 'codicon-refresh', action: () => reset() },
+            ]
+          },
+          {
+            id: 'edit', label: 'Edit',
+            items: [
+              { label: 'Search in Files', icon: 'codicon-search', action: () => { setActiveActivity('search'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+F' },
+              { label: 'File Explorer', icon: 'codicon-files', action: () => { setActiveActivity('explorer'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+E' },
+              { separator: true },
+              { label: 'Git', icon: 'codicon-source-control', action: () => { setActiveActivity('git'); setSidebarOpen(true); }, shortcut: 'Ctrl+Shift+G' },
+            ]
+          },
+          {
+            id: 'view', label: 'View',
+            items: [
+              { label: sidebarOpen ? 'Hide Sidebar' : 'Show Sidebar', icon: 'codicon-layout-sidebar-left', action: () => setSidebarOpen(p => !p), shortcut: 'Ctrl+B' },
+              { label: terminalOpen ? 'Hide Terminal' : 'Show Terminal', icon: 'codicon-terminal', action: () => setTerminalOpen(p => !p), shortcut: 'Ctrl+`' },
+              { label: rightPanelOpen ? 'Hide Chat Panel' : 'Show Chat Panel', icon: 'codicon-comment-discussion', action: () => setRightPanelOpen(p => !p) },
+              { separator: true },
+              ...Object.entries(THEMES).map(([key, th]) => ({
+                label: th.name,
+                icon: theme === key ? 'codicon-check' : 'codicon-circle-large-outline',
+                action: () => setTheme(key),
+              })),
+            ]
+          },
+          {
+            id: 'run', label: 'Run',
+            items: [
+              { label: isRunning ? 'Stop Project' : 'Run Project', icon: isRunning ? 'codicon-debug-stop' : 'codicon-play', action: () => { toggleRun(); }, shortcut: 'F5' },
+              { separator: true },
+              { label: 'Open Terminal', icon: 'codicon-terminal', action: () => { setTerminalOpen(true); setTerminalTab('terminal'); } },
+            ]
+          },
+          {
+            id: 'help', label: 'Help',
+            items: [
+              { label: 'About Octopus', icon: 'codicon-info', action: () => setMessages(prev => [...prev, { role: 'octopus', text: '🐙 **Octopus AI** — AI assistant for building web applications\n\nRuns with 8 parallel legs to complete tasks fast!' }]) },
+              { label: 'Extensions', icon: 'codicon-extensions', action: () => { setActiveActivity('extensions'); setSidebarOpen(true); } },
+            ]
+          },
+        ].map(menu => (
+          <div key={menu.id} style={{ position: 'relative' }}>
+            <button
+              style={{ background: menuOpen === menu.id ? t.border : 'transparent', border: 'none', color: menuOpen === menu.id ? t.text : t.textMuted, padding: '3px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, height: 24 }}
+              onClick={e => { e.stopPropagation(); setMenuOpen(menuOpen === menu.id ? null : menu.id); }}
+              onMouseEnter={e => { if (menuOpen && menuOpen !== menu.id) { setMenuOpen(menu.id); } e.currentTarget.style.color = t.text; }}
+              onMouseLeave={e => { if (menuOpen !== menu.id) e.currentTarget.style.color = t.textMuted; }}
+            >
+              {menu.label}
+            </button>
+            {menuOpen === menu.id && (
+              <div
+                style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: '4px 0', zIndex: 999, minWidth: 220, boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                {menu.items.map((item, i) =>
+                  item.separator
+                    ? <div key={i} style={{ height: 1, background: t.border, margin: '4px 8px' }} />
+                    : (
+                      <div key={i}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 14px', cursor: 'pointer', borderRadius: 0 }}
+                        onMouseEnter={e => e.currentTarget.style.background = t.accent + '22'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        onClick={() => { item.action(); setMenuOpen(null); }}
+                      >
+                        <i className={`codicon ${item.icon}`} style={{ color: t.accent, fontSize: 14, flexShrink: 0, width: 16 }} />
+                        <span style={{ fontSize: 12, color: t.text, flex: 1 }}>{item.label}</span>
+                        {item.shortcut && <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace' }}>{item.shortcut}</span>}
+                      </div>
+                    )
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Center Search Box */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '3px 10px', width: '100%', maxWidth: 380, cursor: 'text' }}
+            onClick={() => { setActiveActivity('search'); setSidebarOpen(true); }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.boxShadow = `0 0 0 1px ${t.accent}44`; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <i className="codicon codicon-search" style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }} />
+            <input
+              ref={searchInputRef}
+              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: t.text, fontSize: 12, fontFamily: "'Inter', 'Segoe UI', sans-serif" }}
+              placeholder="Search files, commands..."
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); if (e.target.value) { setActiveActivity('search'); setSidebarOpen(true); doSearch(e.target.value); } }}
+              onKeyDown={e => { if (e.key === 'Enter') { setActiveActivity('search'); setSidebarOpen(true); doSearch(searchQuery); } if (e.key === 'Escape') e.target.blur(); }}
+              onClick={e => e.stopPropagation()}
+            />
+            <kbd style={{ fontSize: 10, color: t.textMuted, background: t.border + '88', borderRadius: 3, padding: '1px 5px', fontFamily: 'monospace', flexShrink: 0 }}>Ctrl+P</kbd>
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div style={{ width: 1, height: 16, background: t.border, marginRight: 10, flexShrink: 0 }} />
+
+        {/* Project Switcher */}
         <div style={{ position: 'relative' }}>
           <span
-            style={{ fontSize: 11, color: t.textMuted, cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
-            onClick={() => setProjectsOpen(p => !p)}
+            style={{ fontSize: 11, color: t.textMuted, cursor: 'pointer', padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}
+            onClick={e => { e.stopPropagation(); setProjectsOpen(p => !p); setMenuOpen(null); }}
             onMouseEnter={e => e.currentTarget.style.background = t.border}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
-            — {projectName} ▾
+            <i className="codicon codicon-folder" style={{ fontSize: 12, color: t.accent }} />
+            {projectName}
+            <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
           </span>
-          {projectsOpen && projects.length > 0 && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: 4, zIndex: 100, minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
-              <p style={{ fontSize: 10, color: t.textMuted, padding: '4px 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>المشاريع الأخيرة</p>
+          {projectsOpen && (
+            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: 4, zIndex: 300, minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+              onClick={e => e.stopPropagation()}>
+              <p style={{ fontSize: 10, color: t.textMuted, padding: '4px 10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recent Projects</p>
               {projects.map((p, i) => (
                 <div key={i}
-                  onClick={() => switchProject(p)}
+                  onClick={() => { switchProject(p); setProjectsOpen(false); }}
                   style={{ padding: '6px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: p.path === currentDir ? t.accent : t.text, background: p.path === currentDir ? t.accent + '22' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
                   onMouseEnter={e => e.currentTarget.style.background = t.border}
                   onMouseLeave={e => e.currentTarget.style.background = p.path === currentDir ? t.accent + '22' : 'transparent'}
@@ -715,35 +879,41 @@ export default function App() {
                   </div>
                 </div>
               ))}
+              {projects.length === 0 && <p style={{ fontSize: 11, color: t.textMuted, padding: '6px 10px' }}>No recent projects</p>}
               <div style={{ borderTop: `0.5px solid ${t.border}`, marginTop: 4, paddingTop: 4 }}>
-                <div
-                  onClick={openFolder}
+                <div onClick={() => { openFolder(); setProjectsOpen(false); }}
                   style={{ padding: '6px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: t.accent, display: 'flex', alignItems: 'center', gap: 8 }}
                   onMouseEnter={e => e.currentTarget.style.background = t.border}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <i className="codicon codicon-folder-opened" style={{ fontSize: 13 }} />
-                  فتح مجلد جديد
+                  Open New Folder
                 </div>
               </div>
             </div>
           )}
         </div>
-        <div style={{ flex: 1 }} />
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: loading ? "#f0883e" : "#3fb950" }} />
-          <span style={{ fontSize: 11, color: t.textMuted }}>{loading ? "يعمل..." : "جاهز"}</span>
+
+        {/* Status */}
+        <div style={{ display: "flex", gap: 5, alignItems: "center", padding: '0 10px', borderLeft: `0.5px solid ${t.border}`, borderRight: `0.5px solid ${t.border}` }}>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: loading ? "#f0883e" : "#3fb950", flexShrink: 0 }} />
+          <span style={{ fontSize: 11, color: t.textMuted, whiteSpace: 'nowrap' }}>{loading ? "Working..." : "Ready"}</span>
         </div>
+
+        {/* Theme Switcher */}
         <div style={{ position: 'relative' }}>
           <button
-            style={{ background: 'transparent', border: `0.5px solid ${t.border}`, borderRadius: 5, color: t.textMuted, padding: "3px 8px", fontSize: 11, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => setThemeOpen(p => !p)}
+            style={{ background: 'transparent', border: 'none', borderRadius: 5, color: t.textMuted, padding: "0 10px", fontSize: 11, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 5, height: 36 }}
+            onClick={e => { e.stopPropagation(); setThemeOpen(p => !p); setMenuOpen(null); }}
+            onMouseEnter={e => e.currentTarget.style.background = t.border}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
           >
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: t.accent }} />
             {t.name}
           </button>
           {themeOpen && (
-            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: 4, zIndex: 100, minWidth: 130, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}>
+            <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: 4, zIndex: 300, minWidth: 130, boxShadow: '0 8px 24px rgba(0,0,0,0.5)' }}
+              onClick={e => e.stopPropagation()}>
               {Object.entries(THEMES).map(([key, th]) => (
                 <div key={key} onClick={() => { setTheme(key); setThemeOpen(false); }}
                   style={{ padding: '5px 10px', borderRadius: 5, cursor: 'pointer', fontSize: 12, color: key === theme ? t.accent : t.text, background: key === theme ? t.accent + '22' : 'transparent', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -767,7 +937,10 @@ export default function App() {
           {activityItems.map(item => (
             <button key={item.id} title={item.title}
               style={{ width: 36, height: 36, background: activeActivity === item.id ? t.border : 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRight: activeActivity === item.id ? `2px solid ${t.accent}` : '2px solid transparent' }}
-              onClick={() => setActiveActivity(item.id)}
+              onClick={() => {
+                if (activeActivity === item.id) setSidebarOpen(p => !p);
+                else { setActiveActivity(item.id); setSidebarOpen(true); }
+              }}
               onMouseEnter={e => { if (activeActivity !== item.id) e.currentTarget.style.background = t.border + '66' }}
               onMouseLeave={e => { if (activeActivity !== item.id) e.currentTarget.style.background = 'transparent' }}
             >
@@ -775,7 +948,7 @@ export default function App() {
             </button>
           ))}
           <div style={{ flex: 1 }} />
-          <button title="فتح مجلد" style={{ width: 36, height: 36, background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
+          <button title="Open Folder" style={{ width: 36, height: 36, background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 }}
             onClick={openFolder}
             onMouseEnter={e => e.currentTarget.style.background = t.border + '66'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -785,13 +958,13 @@ export default function App() {
         </div>
 
         {/* Sidebar */}
-        <div style={{ width: sidebarWidth, background: t.sidebar, borderLeft: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+        {sidebarOpen && <div style={{ width: sidebarWidth, background: t.sidebar, borderLeft: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "8px 12px", borderBottom: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, color: t.textMuted, textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: 500 }}>
-              {activeActivity === 'explorer' ? 'مستكشف' : activeActivity === 'search' ? 'بحث' : activeActivity === 'git' ? 'Git' : 'إضافات'}
+              {activeActivity === 'explorer' ? 'EXPLORER' : activeActivity === 'search' ? 'SEARCH' : activeActivity === 'git' ? 'GIT' : 'EXTENSIONS'}
             </span>
             <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 14 }}
-              onClick={() => { const name = prompt("اسم الملف:"); if (name) setFiles(prev => [...prev, { name, content: "" }]); }}>+</button>
+              onClick={() => { const name = prompt("File name:"); if (name) setFiles(prev => [...prev, { name, content: "" }]); }}>+</button>
           </div>
           {activeActivity === 'explorer' && (
             <div style={{ overflowY: "auto", flex: 1, paddingTop: 4 }}>
@@ -816,7 +989,7 @@ export default function App() {
               <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
                 <input
                   style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none' }}
-                  placeholder="ابحث في الملفات..."
+                  placeholder="Search in files..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') doSearch(searchQuery); }}
@@ -824,9 +997,9 @@ export default function App() {
                 />
               </div>
               <div style={{ overflowY: 'auto', flex: 1 }}>
-                {searching && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري البحث...</p>}
+                {searching && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>Searching...</p>}
                 {searchResults.length === 0 && !searching && searchQuery && (
-                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد نتائج</p>
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No results found</p>
                 )}
                 {(() => {
                   // تجميع النتائج حسب الملف
@@ -842,7 +1015,7 @@ export default function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', background: t.border + '33', position: 'sticky', top: 0 }}>
                         {(() => { const { icon, color } = getFileIcon(file); return <i className={`codicon ${icon}`} style={{ color, fontSize: 12 }} />; })()}
                         <span style={{ fontSize: 11, color: t.accent, fontWeight: 500 }}>{file}</span>
-                        <span style={{ fontSize: 10, color: t.textMuted, marginRight: 'auto' }}>{data.lines.length} نتيجة</span>
+                        <span style={{ fontSize: 10, color: t.textMuted, marginRight: 'auto' }}>{data.lines.length} result{data.lines.length !== 1 ? 's' : ''}</span>
                       </div>
                       {/* السطور */}
                       {data.lines.map((r, i) => (
@@ -869,11 +1042,11 @@ export default function App() {
                   style={{ width: '100%', background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '5px 10px', fontSize: 12, cursor: 'pointer', marginBottom: 6 }}
                   onClick={loadGitStatus}
                 >
-                  <i className="codicon codicon-refresh" style={{ fontSize: 12 }} /> تحديث
+                  <i className="codicon codicon-refresh" style={{ fontSize: 12 }} /> Refresh
                 </button>
                 <input
                   style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none', marginBottom: 6 }}
-                  placeholder="رسالة الـ commit..."
+                  placeholder="Commit message..."
                   value={commitMsg}
                   onChange={e => setCommitMsg(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') doCommit(); }}
@@ -888,8 +1061,8 @@ export default function App() {
                 </button>
               </div>
               <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
-                {gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري التحميل...</p>}
-                {gitFiles.length === 0 && !gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد تغييرات</p>}
+                {gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>Loading...</p>}
+                {gitFiles.length === 0 && !gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No changes</p>}
                 {gitFiles.map((f, i) => (
                   <div key={i}
                     style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
@@ -912,7 +1085,7 @@ export default function App() {
               <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
                 <input
                   style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none' }}
-                  placeholder="ابحث عن إضافة..."
+                  placeholder="Search extensions..."
                   value={extSearchQuery}
                   onChange={e => {
                     setExtSearchQuery(e.target.value);
@@ -923,21 +1096,21 @@ export default function App() {
               </div>
               <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
                 {extSearching && (
-                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري البحث...</p>
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>Searching...</p>
                 )}
                 {!extSearching && extSearchResults.length === 0 && extSearchQuery === '' && (
                   <div style={{ padding: 20, textAlign: 'center' }}>
                     <div style={{ fontSize: 48, marginBottom: 12 }}>🧩</div>
                     <h3 style={{ fontSize: 14, fontWeight: 600, color: t.text, margin: '0 0 8px' }}>
-                      سوق الإضافات
+                      Extensions Marketplace
                     </h3>
                     <p style={{ fontSize: 11, color: t.textMuted, margin: '0 0 16px', lineHeight: 1.5 }}>
-                      ابحث عن إضافات VS Code لتثبيتها
+                      Search for VS Code extensions to install
                     </p>
                   </div>
                 )}
                 {!extSearching && extSearchResults.length === 0 && extSearchQuery !== '' && (
-                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد نتائج</p>
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No results found</p>
                 )}
                 {extSearchResults.map((ext, i) => (
                   <div
@@ -969,7 +1142,7 @@ export default function App() {
                       </div>
                     </div>
                     {isExtensionInstalled(ext.id) ? (
-                      <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 500 }}>✓ مثبت</span>
+                      <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 500 }}>✓ Installed</span>
                     ) : (
                       <button
                         style={{
@@ -986,7 +1159,7 @@ export default function App() {
                           installExtension(ext);
                         }}
                       >
-                        تثبيت
+                        Install
                       </button>
                     )}
                   </div>
@@ -994,7 +1167,7 @@ export default function App() {
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Resize Handle */}
         <div style={{ width: 3, cursor: 'col-resize', background: 'transparent', flexShrink: 0 }}
@@ -1053,7 +1226,7 @@ export default function App() {
                 <button
                   style={{ position: 'absolute', top: 20, right: 20, background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '8px 12px', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36 }}
                   onClick={() => setSelectedExtension(null)}
-                  title="إغلاق"
+                  title="Close"
                 >
                   <i className="codicon codicon-close" style={{ fontSize: 16 }} />
                 </button>
@@ -1073,7 +1246,7 @@ export default function App() {
                       <div style={{ display: 'flex', gap: 16, fontSize: 14, color: t.textMuted }}>
                         <span>v{selectedExtension.version}</span>
                         <span>👤 {selectedExtension.publisher || selectedExtension.namespace}</span>
-                        <span>⬇️ {selectedExtension.downloadCount || selectedExtension.downloads || 0} تحميل</span>
+                        <span>⬇️ {selectedExtension.downloadCount || selectedExtension.downloads || 0} downloads</span>
                       </div>
                     </div>
                   </div>
@@ -1088,21 +1261,21 @@ export default function App() {
                         style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
                         onClick={() => uninstallExtension(selectedExtension.id)}
                       >
-                        ❌ إلغاء التثبيت
+                        ❌ Uninstall
                       </button>
                     ) : (
                       <button
                         style={{ background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
                         onClick={() => installExtension(selectedExtension)}
                       >
-                        📥 تثبيت الإضافة
+                        📥 Install Extension
                       </button>
                     )}
                   </div>
                   
                   {selectedExtension.tags && selectedExtension.tags.length > 0 && (
                     <div style={{ marginBottom: 24 }}>
-                      <h3 style={{ fontSize: 16, fontWeight: 600, color: t.text, marginBottom: 12 }}>الوسوم</h3>
+                      <h3 style={{ fontSize: 16, fontWeight: 600, color: t.text, marginBottom: 12 }}>Tags</h3>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {selectedExtension.tags.map((tag, i) => (
                           <span key={i} style={{ background: t.border, padding: '4px 12px', borderRadius: 12, fontSize: 12, color: t.textMuted }}>
@@ -1153,15 +1326,15 @@ export default function App() {
                     Octopus AI
                   </h1>
                   <p style={{ fontSize: 13, color: t.textMuted, marginTop: 6 }}>
-                    محرر ذكاء اصطناعي متعدد الأرجل
+                    AI-powered multi-leg code editor
                   </p>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                   {[
-                    { key: 'Ctrl+O', label: 'فتح مجلد' },
-                    { key: 'Ctrl+P', label: 'بحث سريع' },
-                    { key: 'Ctrl+`', label: 'فتح Terminal' },
+                    { key: 'Ctrl+O', label: 'Open Folder' },
+                    { key: 'Ctrl+P', label: 'Quick Search' },
+                    { key: 'Ctrl+`', label: 'Open Terminal' },
                   ].map(item => (
                     <div key={item.key} style={{
                       display: 'flex', alignItems: 'center', gap: 16,
@@ -1199,7 +1372,7 @@ export default function App() {
                   </button>
                 ))}
                 <div style={{ flex: 1 }} />
-                <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={() => setTerminalHistory([{ type: 'system', text: '🐙 Terminal جاهز' }])}>
+                <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={() => setTerminalHistory([{ type: 'system', text: '🐙 Terminal ready' }])}>
                   <i className="codicon codicon-trash" style={{ fontSize: 14 }} />
                 </button>
                 <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={() => setTerminalOpen(false)}>
@@ -1210,8 +1383,8 @@ export default function App() {
                 {terminalTab === 'terminal' && terminalHistory.map((h, i) => (
                   <div key={i} style={{ fontSize: 12, color: h.type === 'input' ? t.accent : h.type === 'error' ? '#ff7b72' : h.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{h.text}</div>
                 ))}
-                {terminalTab === 'problems' && <p style={{ fontSize: 12, color: t.textMuted }}>لا توجد مشاكل</p>}
-                {terminalTab === 'output' && <p style={{ fontSize: 12, color: t.textMuted }}>لا يوجد output</p>}
+                {terminalTab === 'problems' && <p style={{ fontSize: 12, color: t.textMuted }}>No problems</p>}
+                {terminalTab === 'output' && <p style={{ fontSize: 12, color: t.textMuted }}>No output</p>}
                 <div ref={terminalBottomRef} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
@@ -1221,7 +1394,7 @@ export default function App() {
                   value={terminalInput}
                   onChange={e => setTerminalInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') runCommand(terminalInput); }}
-                  placeholder="اكتب أمراً..."
+                  placeholder="Enter command..."
                   dir="ltr"
                 />
               </div>
@@ -1230,96 +1403,191 @@ export default function App() {
         </div>
 
         {/* Right Panel - AI */}
-        <div style={{ width: 260, background: t.sidebar, borderRight: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
-          <div style={{ padding: "8px 12px", borderBottom: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-            <i className="codicon codicon-sparkle" style={{ color: t.accent, fontSize: 14 }} />
-            <span style={{ fontSize: 11, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.8px' }}>الأرجل الثمانية</span>
-          </div>
-          <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 5, overflowY: "auto", maxHeight: 260 }}>
-            {legs.map(leg => (
-              <div key={leg.id} style={{ background: t.bg, border: `0.5px solid ${leg.status === "done" ? "#238636" : leg.status === "working" ? "#9e6a03" : t.border}`, borderRadius: 6, padding: "7px 10px", opacity: leg.status === "idle" ? 0.4 : 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: legColor(leg.status), flexShrink: 0 }} />
-                  <span style={{ fontSize: 11, color: legColor(leg.status), fontWeight: 500 }}>{leg.name}</span>
-                </div>
-                <p style={{ fontSize: 10, color: t.textMuted, margin: "0 0 4px" }}>{leg.task}</p>
-                <div style={{ background: t.border, borderRadius: 3, height: 2 }}>
-                  <div style={{ background: leg.status === "done" ? "#3fb950" : "#f0883e", width: `${leg.progress}%`, height: "100%", borderRadius: 3, transition: "width 0.2s ease" }} />
-                </div>
-              </div>
+        <div style={{ display: "flex", flexShrink: 0 }}>
+
+          {/* Right Panel Bar */}
+          <div style={{ width: 40, background: t.activityBar, borderRight: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 6, gap: 2, flexShrink: 0, order: 2 }}>
+            {[
+              { id: 'chat',    icon: 'codicon-comment-discussion', title: 'Chat' },
+              { id: 'legs',    icon: 'codicon-pulse',              title: 'Legs' },
+              { id: 'context', icon: 'codicon-list-tree',          title: 'Context' },
+              { id: 'history', icon: 'codicon-history',            title: 'History' },
+            ].map(item => (
+              <button key={item.id} title={item.title}
+                style={{ width: 32, height: 32, background: rightPanelTab === item.id ? t.border : 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', borderLeft: rightPanelTab === item.id ? `2px solid ${t.accent}` : '2px solid transparent', position: 'relative' }}
+                onClick={() => {
+                  if (rightPanelTab === item.id) setRightPanelOpen(p => !p);
+                  else { setRightPanelTab(item.id); setRightPanelOpen(true); }
+                }}
+                onMouseEnter={e => { if (rightPanelTab !== item.id) e.currentTarget.style.background = t.border + '66' }}
+                onMouseLeave={e => { if (rightPanelTab !== item.id) e.currentTarget.style.background = 'transparent' }}
+              >
+                <i className={`codicon ${item.icon}`} style={{ color: rightPanelTab === item.id ? t.accent : t.textMuted, fontSize: 16 }} />
+                {item.id === 'chat' && loading && (
+                  <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f0883e' }} />
+                )}
+                {item.id === 'legs' && legs.some(l => l.status === 'working') && (
+                  <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f0883e' }} />
+                )}
+              </button>
             ))}
+            <div style={{ flex: 1 }} />
+            <button title="Clear Chat"
+              style={{ width: 32, height: 32, background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}
+              onClick={reset}
+              onMouseEnter={e => e.currentTarget.style.background = t.border + '66'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <i className="codicon codicon-clear-all" style={{ color: t.textMuted, fontSize: 16 }} />
+            </button>
           </div>
 
-          {/* AI Chat */}
-          <div style={{ borderTop: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px' }}>
-            <i className="codicon codicon-comment-discussion" style={{ color: t.accent, fontSize: 14 }} />
-            <span style={{ fontSize: 11, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.8px' }}>المحادثة</span>
-            <div style={{ flex: 1 }} />
-            <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 11 }} onClick={reset}>مسح</button>
-          </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
-            {messages.map((m, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                  <div style={{ width: 18, height: 18, borderRadius: '50%', background: m.role === 'octopus' ? t.accent + '33' : t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
-                    {m.role === 'octopus' ? '🐙' : '👤'}
+          {/* Right Panel Content */}
+          {rightPanelOpen && <div style={{ width: 260, background: t.sidebar, borderRight: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0, order: 1 }}>
+
+            {/* Panel Header */}
+            <div style={{ padding: "8px 12px", borderBottom: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <i className={`codicon ${rightPanelTab === 'chat' ? 'codicon-comment-discussion' : rightPanelTab === 'legs' ? 'codicon-pulse' : rightPanelTab === 'context' ? 'codicon-list-tree' : 'codicon-history'}`} style={{ color: t.accent, fontSize: 13 }} />
+              <span style={{ fontSize: 11, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                {rightPanelTab === 'chat' ? 'CHAT' : rightPanelTab === 'legs' ? 'EIGHT LEGS' : rightPanelTab === 'context' ? 'CONTEXT' : 'HISTORY'}
+              </span>
+            </div>
+
+            {/* Legs Tab */}
+            {rightPanelTab === 'legs' && (
+              <div style={{ flex: 1, padding: 8, display: "flex", flexDirection: "column", gap: 5, overflowY: "auto" }}>
+                {legs.map(leg => (
+                  <div key={leg.id} style={{ background: t.bg, border: `0.5px solid ${leg.status === "done" ? "#238636" : leg.status === "working" ? "#9e6a03" : t.border}`, borderRadius: 6, padding: "7px 10px", opacity: leg.status === "idle" ? 0.4 : 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: legColor(leg.status), flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: legColor(leg.status), fontWeight: 500 }}>{leg.name}</span>
+                      <span style={{ marginRight: 'auto', fontSize: 10, color: t.textMuted }}>{leg.progress}%</span>
+                    </div>
+                    <p style={{ fontSize: 10, color: t.textMuted, margin: "0 0 4px" }}>{leg.task}</p>
+                    <div style={{ background: t.border, borderRadius: 3, height: 2 }}>
+                      <div style={{ background: leg.status === "done" ? "#3fb950" : "#f0883e", width: `${leg.progress}%`, height: "100%", borderRadius: 3, transition: "width 0.2s ease" }} />
+                    </div>
                   </div>
-                  <span style={{ fontSize: 10, color: m.role === "octopus" ? t.accent : t.textMuted, fontWeight: 500 }}>
-                    {m.role === "octopus" ? "أخطبوط" : "أنت"}
-                  </span>
-                </div>
-                <div style={{ marginRight: 23, background: m.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}` }}>
-                  <p style={{ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                   {m.text}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {awaitingConfirm && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingRight: 23 }}>
-                <button
-                  style={{ background: '#238636', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: "'IBM Plex Sans Arabic', sans-serif", fontWeight: 500 }}
-                  onClick={executeApprovedPlan}
-                >
-                  ✅ موافق — نفّذ
-                </button>
-                <button
-                  style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}
-                  onClick={cancelPlan}
-                >
-                  ❌ إلغاء
-                </button>
+                ))}
               </div>
             )}
-            <div ref={bottomRef} />
-          </div>
 
-          {/* Command Input */}
-          <div style={{ padding: "8px 10px", borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: '6px 8px' }}>
-              <textarea
-                style={{ flex: 1, background: 'transparent', color: t.text, border: 'none', outline: 'none', fontSize: 12, resize: 'none', fontFamily: "'IBM Plex Sans Arabic', sans-serif", lineHeight: 1.5 }}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={onKey}
-                placeholder="اكتب أمرك... (أخطبوط سيشرح قبل التنفيذ)"
-                rows={2}
-                dir="auto"
-              />
-              <button
-                style={{ background: loading ? t.border : t.accent, border: 'none', borderRadius: 6, color: '#fff', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                onClick={send} disabled={loading}
-              >
-                <i className={`codicon ${loading ? 'codicon-loading' : 'codicon-send'}`} style={{ fontSize: 14 }} />
-              </button>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 3 }}
-                onClick={() => setTerminalOpen(p => !p)}>
-                <i className="codicon codicon-terminal" style={{ fontSize: 12 }} /> Terminal
-              </button>
-            </div>
-          </div>
+            {/* Chat Tab */}
+            {rightPanelTab === 'chat' && (
+              <>
+                <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
+                  {messages.map((m, i) => (
+                    <div key={i} style={{ marginBottom: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: m.role === 'octopus' ? t.accent + '33' : t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
+                          {m.role === 'octopus' ? '🐙' : '👤'}
+                        </div>
+                        <span style={{ fontSize: 10, color: m.role === "octopus" ? t.accent : t.textMuted, fontWeight: 500 }}>
+                          {m.role === "octopus" ? "Octopus" : "You"}
+                        </span>
+                      </div>
+                      <div style={{ marginRight: 23, background: m.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}` }}>
+                        <p style={{ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                          {m.text}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {awaitingConfirm && (
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingRight: 23 }}>
+                      <button style={{ background: '#238636', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 500 }} onClick={executeApprovedPlan}>
+                        ✅ Approve — Execute
+                      </button>
+                      <button style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '7px 14px', fontSize: 12, cursor: 'pointer' }} onClick={cancelPlan}>
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  )}
+                  <div ref={bottomRef} />
+                </div>
+                <div style={{ padding: "8px 10px", borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: '6px 8px' }}>
+                    <textarea
+                      style={{ flex: 1, background: 'transparent', color: t.text, border: 'none', outline: 'none', fontSize: 12, resize: 'none', fontFamily: "'Inter', 'Segoe UI', sans-serif", lineHeight: 1.5 }}
+                      value={input}
+                      onChange={e => setInput(e.target.value)}
+                      onKeyDown={onKey}
+                      placeholder="Type your command..."
+                      rows={2}
+                      dir="ltr"
+                    />
+                    <button
+                      style={{ background: loading ? t.border : t.accent, border: 'none', borderRadius: 6, color: '#fff', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      onClick={send} disabled={loading}
+                    >
+                      <i className={`codicon ${loading ? 'codicon-loading' : 'codicon-send'}`} style={{ fontSize: 14 }} />
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 3 }}
+                      onClick={() => setTerminalOpen(p => !p)}>
+                      <i className="codicon codicon-terminal" style={{ fontSize: 12 }} /> Terminal
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Context Tab */}
+            {rightPanelTab === 'context' && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+                <p style={{ fontSize: 11, color: t.textMuted, marginBottom: 10 }}>Open files in context</p>
+                {files.filter(f => f.content).length === 0
+                  ? <p style={{ fontSize: 11, color: t.textMuted, opacity: 0.5 }}>No open files</p>
+                  : files.filter(f => f.content).slice(0, 5).map((f, i) => {
+                      const { icon, color } = getFileIcon(f.name);
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 4, background: f.name === activeFile ? t.accent + '11' : t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
+                          onClick={() => setActiveFile(f.name)}>
+                          <i className={`codicon ${icon}`} style={{ color, fontSize: 13 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</p>
+                            <p style={{ fontSize: 10, color: t.textMuted, margin: 0 }}>{f.content?.split('\n').length || 0} lines</p>
+                          </div>
+                          {f.name === activeFile && <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.accent, flexShrink: 0 }} />}
+                        </div>
+                      );
+                    })
+                }
+                {files.filter(f => f.content).length > 5 && (
+                  <p style={{ fontSize: 10, color: t.textMuted, marginTop: 6 }}>+ {files.filter(f => f.content).length - 5} more files</p>
+                )}
+                <div style={{ marginTop: 16, padding: '10px 12px', background: t.bg, borderRadius: 8, border: `0.5px solid ${t.border}` }}>
+                  <p style={{ fontSize: 10, color: t.textMuted, margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Current Project</p>
+                  <p style={{ fontSize: 12, color: t.text, margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <i className="codicon codicon-folder" style={{ color: t.accent, fontSize: 13 }} />
+                    {projectName}
+                  </p>
+                  {currentDir && <p style={{ fontSize: 10, color: t.textMuted, margin: '4px 0 0', wordBreak: 'break-all' }}>{currentDir}</p>}
+                </div>
+              </div>
+            )}
+
+            {/* History Tab */}
+            {rightPanelTab === 'history' && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: 12 }}>
+                <p style={{ fontSize: 11, color: t.textMuted, marginBottom: 10 }}>Command history</p>
+                {messages.filter(m => m.role === 'user').length === 0
+                  ? <p style={{ fontSize: 11, color: t.textMuted, opacity: 0.5 }}>No previous commands</p>
+                  : messages.filter(m => m.role === 'user').map((m, i) => (
+                    <div key={i} style={{ padding: '7px 10px', borderRadius: 6, marginBottom: 4, background: t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
+                      onClick={() => { setInput(m.text); setRightPanelTab('chat'); }}
+                      onMouseEnter={e => e.currentTarget.style.background = t.border + '44'}
+                      onMouseLeave={e => e.currentTarget.style.background = t.bg}
+                    >
+                      <p style={{ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.text}</p>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+
+          </div>}
         </div>
       </div>
 
@@ -1340,12 +1608,12 @@ export default function App() {
           }}
         >
           <i className={`codicon ${isRunning ? 'codicon-stop-circle' : 'codicon-play'}`} style={{ fontSize: 12 }} />
-          {isRunning ? 'إيقاف' : 'تشغيل'}
+          {isRunning ? 'Stop' : 'Run'}
         </button>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>🐙 أخطبوط AI</span>
+        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>🐙 Octopus AI</span>
         <div style={{ flex: 1 }} />
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-          {activeFile} • {currentFile?.content?.split('\n').length || 0} سطر
+          {activeFile} • {currentFile?.content?.split('\n').length || 0} lines
         </span>
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>UTF-8</span>
         <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }} onClick={() => setThemeOpen(p => !p)}>

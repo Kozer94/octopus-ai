@@ -1,0 +1,30 @@
+{
+  "prettier": {
+    "name": "prettier",
+    "version": "3.8.3",
+    "description": "Prettier is an opinionated code formatter",
+    "installedAt": "2026-05-24T02:20:40.769Z",
+    "enabled": true,
+    "hook": "afterResponse"
+  },
+  "eslint": {
+    "name": "eslint",
+    "version": "10.4.0",
+    "description": "An AST-based pattern checker for JavaScript.",
+    "installedAt": "2026-05-24T02:22:48.051Z",
+    "enabled": true,
+    "hook": "afterResponse"
+  },
+  "claude-code": {
+    "name": "claude-code",
+    "displayName": "Claude Code for VS Code",
+    "description": "Claude Code for VS Code: Harness the power of Claude Code without leaving your IDE",
+    "version": "2.1.150",
+    "installedAt": "2026-05-24T09:14:50.617Z",
+    "enabled": true,
+    "hook": "afterResponse",
+    "icon": "https://open-vsx.org/api/Anthropic/claude-code/alpine-arm64/2.1.150/file/claude-logo.png",
+    "namespace": "Anthropic",
+    "source": "vsx"
+  }
+}

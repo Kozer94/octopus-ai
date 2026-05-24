@@ -15,29 +15,13 @@ const {
   summarizeProjectMap,
 } = require('./projectMapEngine');
 const {
-  createBrainController,
-  buildLegSystemPrompt,
-  buildMergeGovernance,
-  explainLegResult,
-  getDirective,
+  runBrainController,
+  previewBrainController,
 } = require('./brainController');
 const {
-  buildRealState,
-} = require('./truthLayer');
-const {
-  validateLegResult,
-  validatePlan,
   validateProjectBinding,
-  validateRealState,
-  makeDecision,
-  makeLegDecision,
-  makePlanDecision,
 } = require('./validatorLayer');
-const {
-  selectModel,
-  detectTaskType,
-  detectComplexity,
-} = require('./modelSelector');
+const { selectModel } = require('./modelSelector');
 const pluginManager = require('./plugins/pluginManager');
 const marketplace = require('./plugins/marketplace');
 
@@ -252,27 +236,27 @@ let watcher = null;
 let watchClients = [];
 
 const PROVIDERS = [
-  // Groq - llama كبير
+  // Groq - llama 3.3 70b (أقوى)
   async (messages, maxTokens) => {
     const completion = await groq.chat.completions.create({
       model: 'llama-3.3-70b-versatile',
-      messages, temperature: 0.5, max_tokens: maxTokens,
+      messages, temperature: 0.5, max_tokens: Math.min(maxTokens, 4096),
     });
     return completion.choices[0].message.content;
   },
-  // Groq - llama سريع
+  // Groq - llama 3.1 8b (سريع)
   async (messages, maxTokens) => {
     const completion = await groq.chat.completions.create({
       model: 'llama-3.1-8b-instant',
-      messages, temperature: 0.5, max_tokens: maxTokens,
+      messages, temperature: 0.5, max_tokens: Math.min(maxTokens, 4096),
     });
     return completion.choices[0].message.content;
   },
-  // Groq - gemma
+  // Groq - llama 3 70b (بديل)
   async (messages, maxTokens) => {
     const completion = await groq.chat.completions.create({
-      model: 'gemma2-9b-it',
-      messages, temperature: 0.5, max_tokens: maxTokens,
+      model: 'llama3-70b-8192',
+      messages, temperature: 0.5, max_tokens: Math.min(maxTokens, 4096),
     });
     return completion.choices[0].message.content;
   },
@@ -325,7 +309,7 @@ const PROVIDERS = [
     return data.choices[0].message.content;
   },
   // Gemini
-  async (messages, maxTokens) => {
+  async (messages, _maxTokens) => {
     if (!process.env.GEMINI_API_KEY) throw new Error('no key');
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -336,7 +320,7 @@ const PROVIDERS = [
   },
 ];
 
-async function callAI(messages, maxTokens = 100000, command = '') {
+async function callAI(messages, maxTokens = 8192, command = '') {
   // استخدام Model Selector لاختيار النموذج المناسب
   const modelSelection = selectModel(command);
   console.log(`🧠 Model Selection: ${modelSelection.reasoning}`);
@@ -348,171 +332,38 @@ async function callAI(messages, maxTokens = 100000, command = '') {
   // دمج مزودين الإضافات مع PROVIDERS الأساسية
   const allProviders = [...pluginProviders.map(p => p.call), ...PROVIDERS];
   
-  // حالياً نستخدم الترتيب الأصلي مع log للـ selection
-  for (const provider of allProviders) {
+  const errors = [];
+  for (let i = 0; i < allProviders.length; i++) {
+    const provider = allProviders[i];
     try {
       const result = await provider(messages, maxTokens);
       if (result) return result;
     } catch (error) {
-      if (error.message === 'no key') continue;
-      if (error.status === 429 || (error.message && error.message.includes('Rate limit'))) {
-        console.log(`⚠️ provider محدود، جرب التالي...`);
+      const msg = error.message || String(error);
+      if (msg === 'no key') { errors.push(`provider[${i}]: no key`); continue; }
+      const is429 = error.status === 429 || error.statusCode === 429 ||
+        msg.includes('Rate limit') || msg.includes('rate limit') ||
+        msg.includes('429') || msg.includes('Too Many Requests') ||
+        msg.includes('quota') || msg.includes('Quota');
+      if (is429) {
+        console.log(`⚠️ provider[${i}] rate limited, trying next...`);
+        errors.push(`provider[${i}]: rate limited`);
         await new Promise(r => setTimeout(r, 500));
         continue;
       }
-      console.log(`⚠️ خطأ في provider: ${error.message}`);
+      console.log(`⚠️ provider[${i}] error: ${msg}`);
+      errors.push(`provider[${i}]: ${msg}`);
       continue;
     }
   }
-  throw new Error('كل الـ providers محدودة، انتظر قليلاً');
-}
-
-function createEightLegPlan(command, terminal = null) {
-  return {
-    tasks: [
-      { leg: 1, name: "رجل الكتابة", task: "كتابة الكود الرئيسي", prompt: `اكتب الجزء الرئيسي المطلوب لهذا الطلب: ${command}` },
-      { leg: 2, name: "رجل الفحص", task: "فحص وتحليل المتطلبات", prompt: `حلل المتطلبات والمخاطر لهذا الطلب: ${command}` },
-      { leg: 3, name: "رجل التعديل", task: "تعديل الملفات الموجودة", prompt: `حدد وعدل الملفات الموجودة اللازمة لهذا الطلب: ${command}` },
-      { leg: 4, name: "رجل الاختبار", task: "التحقق والاختبار", prompt: `اقترح أو اكتب اختبارات وتحقق من صحة هذا الطلب: ${command}` },
-      { leg: 5, name: "رجل الإدارة", task: "تنظيم هيكل المشروع", prompt: `نظم هيكل الملفات والمجلدات لهذا الطلب: ${command}` },
-      { leg: 6, name: "رجل التوليد", task: "توليد كود إضافي", prompt: `ولد أي كود مساعد أو إضافي مطلوب لهذا الطلب: ${command}` },
-      { leg: 7, name: "رجل التحديث", task: "تحديث الإعدادات", prompt: `حدث إعدادات المشروع أو config المطلوبة لهذا الطلب: ${command}` },
-      { leg: 8, name: "رجل الدمج", task: "دمج النتائج", prompt: `ادمج وتأكد من تكامل كل أجزاء هذا الطلب: ${command}` },
-    ],
-    summary: command,
-    terminal,
-  };
+  const summary = errors.join(' | ');
+  console.error(`❌ All providers failed: ${summary}`);
+  throw new Error(`All AI providers failed: ${summary}`);
 }
 
 function isReportCommand(command = '') {
   return /فحص|تقرير|تقريري|حلل|تحليل|وثق|توثيق|ملخص|ملخّص|report|analyze|analysis|documentation|markdown|\bmd\b/i
     .test(String(command || ''));
-}
-
-function createReportPlan(command) {
-  return {
-    tasks: [
-      { leg: 1, task: "فحص المشروع", prompt: `اقرأ وحلل ملفات المشروع واجمع المعلومات اللازمة للتقرير: ${command}` },
-      { leg: 2, task: "كتابة التقرير", prompt: `اكتب report.md كاملاً فقط بناءً على تحليل رجل 1 لـ: ${command}` },
-    ],
-    summary: "تقرير تحليلي شامل للمشروع",
-    reportMode: true,
-  };
-}
-
-function formatList(items, fallback = 'لا يوجد') {
-  const list = (items || []).filter(Boolean);
-  return list.length > 0 ? list.map(item => `- \`${item}\``).join('\n') : fallback;
-}
-
-function topEntries(object, limit = 20) {
-  return Object.keys(object || {}).sort().slice(0, limit);
-}
-
-function inferProjectPurpose(projectMap) {
-  const paths = (projectMap?.filePaths || []).map(item => item.toLowerCase());
-  const packages = Object.keys(projectMap?.dependencies || {}).join(' ').toLowerCase();
-  const signals = [];
-  if (paths.some(p => p.includes('/admin/') || p.startsWith('admin/'))) signals.push('لوحات إدارة');
-  if (paths.some(p => p.includes('/api/'))) signals.push('واجهات API');
-  if (paths.some(p => p.includes('prisma') || p.includes('schema.prisma'))) signals.push('طبقة قاعدة بيانات Prisma');
-  if (packages.includes('next')) signals.push('تطبيق Next.js');
-  if (packages.includes('next-auth') || paths.some(p => p.includes('auth'))) signals.push('مصادقة وصلاحيات');
-  if (paths.some(p => p.includes('card'))) signals.push('إدارة بطاقات أو كيانات مرتبطة بالبطاقات');
-  return signals.length > 0 ? signals.join('، ') : 'تطبيق ويب يحتاج مراجعة وظيفية من الملفات المصدرية';
-}
-
-function buildDeterministicProjectReport(command, projectDir) {
-  const projectMap = projectDir ? ensureProjectMap(projectDir, { watch: false }) : null;
-  const projectName = projectMap?.projectRoot ? pathModule.basename(projectMap.projectRoot) : 'المشروع';
-  const dependencies = topEntries(projectMap?.dependencies, 30);
-  const sourceFolders = projectMap?.sourceFolders || [];
-  const routes = projectMap?.routes || [];
-  const configFiles = projectMap?.configFiles || [];
-  const importantFiles = projectMap?.importantFiles || [];
-  const schemaFiles = (projectMap?.filePaths || []).filter(file => /schema\.prisma|prisma|migration/i.test(file)).slice(0, 30);
-  const sourceFiles = (projectMap?.files || [])
-    .filter(file => ['javascript', 'vue', 'php', 'python', 'java', 'dart'].includes(file.type))
-    .sort((a, b) => b.size - a.size)
-    .slice(0, 20)
-    .map(file => `${file.path} (${file.size} bytes)`);
-  const dependencyEdges = Object.entries(projectMap?.dependencyGraph?.graph || {})
-    .filter(([, value]) => Array.isArray(value.internal) && value.internal.length > 0)
-    .slice(0, 20)
-    .map(([from, value]) => `${from} -> ${value.internal.join(', ')}`);
-
-  return `# تقرير مشروع ${projectName}
-
-## طلب التقرير
-${command}
-
-## ملخص تنفيذي
-هذا التقرير مبني على Project Map Engine وليس على افتراضات عامة. الخريطة الحالية تشير إلى أن المشروع هو: ${inferProjectPurpose(projectMap)}.
-
-## التقنية المكتشفة
-- الأطر: ${(projectMap?.frameworks || []).join(', ') || 'غير محدد'}
-- عدد الملفات المفهرسة: ${projectMap?.stats?.scannedFiles || 0}
-- عدد المجلدات المفهرسة: ${projectMap?.stats?.scannedDirs || 0}
-- العناصر المتجاهلة للأداء: ${(projectMap?.stats?.skippedFiles || 0) + (projectMap?.stats?.skippedDirs || 0)}
-
-## الاعتماديات الرئيسية
-${formatList(dependencies, 'لم يتم العثور على package/composer dependencies قابلة للقراءة.')}
-
-## الملفات والمجلدات المهمة
-### مجلدات المصدر
-${formatList(sourceFolders.slice(0, 40))}
-
-### ملفات مهمة
-${formatList(importantFiles.slice(0, 40))}
-
-### ملفات الإعداد
-${formatList(configFiles.slice(0, 40))}
-
-## مسارات API والراوتات
-${formatList(routes.slice(0, 60), 'لم يتم اكتشاف ملفات routes/API من خريطة المشروع.')}
-
-## قاعدة البيانات و Prisma
-${formatList(schemaFiles, 'لم يتم اكتشاف ملفات Prisma أو migrations ضمن الخريطة الحالية.')}
-
-## أكبر ملفات المصدر
-${formatList(sourceFiles, 'لم يتم اكتشاف ملفات مصدر مناسبة للعرض.')}
-
-## علاقات الاعتماد الداخلية
-${formatList(dependencyEdges, 'لم يتم اكتشاف علاقات import/require داخلية كافية.')}
-
-## حدود التقرير
-تم توليد هذا التقرير من خريطة المشروع والملفات المفهرسة فقط. لا يتم اعتماد أي وصف عام لا يظهر له أثر في الملفات أو الاعتماديات أو المسارات المكتشفة.
-
-## توصيات عملية
-- راجع ملفات API المكتشفة أعلاه أولاً لأنها تمثل سطح التعامل مع البيانات.
-- راجع ملفات Prisma/schema قبل أي تعديل متعلق بالبيانات أو الصلاحيات.
-- تجنب تعديل ملفات الإعداد مثل package.json و next.config.mjs إلا عند وجود سبب واضح ومحدد.
-- اجعل أي تقرير لاحق يعتمد على الملفات المذكورة في هذا التقرير بدل وصف عام غير مرتبط بالمشروع.
-
-## نتيجة التنفيذ
-تم إنشاء هذا التقرير في \`report.md\` فقط. لم يتم تعديل ملفات التطبيق أو الإعدادات ضمن مسار التقرير.
-`;
-}
-
-function normalizeReportResult(_rawResult, command, _analysisResult, projectDir = '') {
-  const reportContent = buildDeterministicProjectReport(command, projectDir);
-
-  return `<file path="report.md">
-${reportContent.trim()}
-</file>`;
-}
-
-function buildProjectUnderstanding(projectDir) {
-  const projectMap = projectDir ? ensureProjectMap(projectDir, { watch: false }) : null;
-  const projectName = projectMap?.projectRoot ? pathModule.basename(projectMap.projectRoot) : 'المشروع';
-  return [
-    `المشروع المحدد هو \`${projectName}\`.`,
-    `الأطر المكتشفة: ${(projectMap?.frameworks || []).join(', ') || 'غير محدد'}.`,
-    `تم فهرسة ${projectMap?.stats?.scannedFiles || 0} ملف و ${projectMap?.stats?.scannedDirs || 0} مجلد.`,
-    `الملفات المهمة: ${(projectMap?.importantFiles || []).slice(0, 12).join(', ') || 'لا يوجد'}.`,
-    `مسارات API/Routes: ${(projectMap?.routes || []).slice(0, 12).join(', ') || 'لم يتم اكتشافها'}.`,
-    'سيتم إنشاء التقرير من Project Map Engine فقط بدون الاعتماد على مزود AI.',
-  ].join('\n');
 }
 
 const SYSTEM_PROMPT = `أنت أخطبوط 🐙 — مساعد ذكاء اصطناعي متخصص في بناء المشاريع البرمجية.
@@ -841,28 +692,6 @@ app.post('/api/project-map', (req, res) => {
   }
 });
 
-app.post('/api/brain/plan', (req, res) => {
-  try {
-    const { command = '', projectDir = '', activeFile = '', plan = null, clientProjectName = '' } = req.body;
-    if (!command) return res.status(400).json({ success: false, error: 'command مطلوب' });
-    const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: '' };
-    if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
-
-    const controlledPlan = plan && Array.isArray(plan.tasks) && plan.tasks.length > 0
-      ? plan
-      : createEightLegPlan(command);
-    const brain = createBrainController({ command, projectDir: binding.projectRoot || projectDir, plan: controlledPlan, activeFile });
-
-    res.json({
-      success: true,
-      plan: controlledPlan,
-      brain,
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // Truth Layer Endpoint - عرض الحقائق من النظام
 app.get('/api/truth/state', (req, res) => {
   try {
@@ -937,345 +766,94 @@ app.post('/api/octopus', aiLimiter, async (req, res) => {
   }
 });
 
-// المرحلة صفر: فهم المشروع وعرض الخطة قبل أي تنفيذ
+// Preview route — Brain Controller v3
 app.post('/api/octopus/preview', aiLimiter, async (req, res) => {
   try {
-    const { command, projectDir = '', clientProjectName = '' } = req.body;
-    if (!command) return res.status(400).json({ success: false, error: 'command مطلوب' });
+    const { command, projectDir = '' } = req.body;
+    if (!command) return res.status(400).json({ success: false, error: 'command is required' });
 
-    const isReport = isReportCommand(command);
-    const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: null };
-    if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
-    const projectRoot = binding.projectRoot;
-    if (isReport && !hasUsableProjectMap(projectRoot)) {
-      return res.status(400).json({
-        success: false,
-        error: 'لم يصل مسار المشروع إلى الخادم أو الخريطة فارغة. افتح مجلد المشروع من جديد ثم أعد طلب التقرير.',
-      });
-    }
+    const preview = await previewBrainController({ command, projectDir, callAI });
 
-    const structure = projectRoot ? getProjectStructure(projectRoot) : [];
-    const structureText = structure.length > 0
-      ? `هيكل المشروع الحقيقي:\n${structure.join('\n')}`
-      : 'لم يتم تحديد مجلد مشروع';
-
-    // Project Map Engine يبني خريطة كاملة ويختار سياقاً صغيراً مرتبطاً بالطلب
-    const fileContentsText = projectRoot
-      ? getProjectContextForTask(projectRoot, command)
-      : '';
-
-    if (isReport) {
-      const plan = createReportPlan(command);
-      const reportUnderstanding = buildProjectUnderstanding(projectRoot);
-
-      const previewResult = `## فهمت المشروع
-${reportUnderstanding}
-
-## ما سأفعله تحديداً
-فحص المشروع ثم كتابة تقرير تحليلي شامل في report.md فقط
-
-## خطة الرجلتين
-- رجل 1: فحص المشروع — يقرأ ويحلل الملفات
-- رجل 2: كتابة التقرير — يكتب report.md فقط
-
-## تحذيرات
-- لن يتم تعديل أي ملف في المشروع، فقط report.md سيُنشأ
-
-\`\`\`json
-${JSON.stringify(plan, null, 2)}
-\`\`\``;
-
-      return res.json({ success: true, preview: previewResult, plan, projectStructure: structure });
-    }
-
-    const previewPrompt = `أنت دماغ أخطبوط. مهمتك فهم المشروع ووضع خطة تفصيلية قبل التنفيذ.
-
-يعتمد السياق أدناه على PROJECT MAP ENGINE:
-- خريطة ملفات كاملة بدون قراءة كل الملفات دفعة واحدة
-- كشف framework والملفات المهمة والمسارات والإعدادات
-- ملفات سياق مختارة فقط حسب طلب المستخدم
-
-${structureText}
-
-${fileContentsText}
-
-طلب المستخدم: ${command}
-
-تعليمات مهمة:
-- افهم المشروع من الخريطة والسياق المختار فقط
-- لا تفترض ملفات غير موجودة
-- لكل رجل، حدد بالضبط: الملف الذي ستعدله أو تنشئه، وماذا ستضيف فيه
-- مثال جيد: "رجل 1 ستعدّل ملف routes/web.php وتضيف route جديد للـ API"
-- مثال سيء: "رجل 1 ستكتب الكود الرئيسي"
-- لا تكتب أي كود الآن، فقط خطة واضحة بالعربية
-- لا تستخدم وسوم <file> أو <terminal> في الخطة
-
-أجب بهذا الشكل بالضبط:
-
-## فهمت المشروع
-[وصف قصير للمشروع بناءً على الملفات الموجودة]
-
-## ما سأفعله تحديداً
-[وصف عام لما سيتم تنفيذه]
-
-## خطة الأرجل الثمانية
-- رجل 1: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 2: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 3: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 4: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 5: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 6: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 7: [الملف المحدد] — [ماذا سيفعل بالضبط]
-- رجل 8: [يدمج النتائج ويتحقق من التكامل]
-
-## تحذيرات
-[أي ملفات قد تتأثر أو أي شيء يجب الانتباه له — أو "لا يوجد تحذيرات"]
-
-ثم أضف كتلة JSON للخطة:
-\`\`\`json
-{
-  "tasks": [
-    {"leg": 1, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 2, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 3, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 4, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 5, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 6, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 7, "task": "وصف قصير", "prompt": "اكتب/عدّل [اسم الملف] لـ: ${command}"},
-    {"leg": 8, "task": "دمج النتائج", "prompt": "ادمج وتأكد من تكامل: ${command}"}
-  ],
-  "summary": "ملخص ما سيتم بناؤه"
-}
-\`\`\``;
-
-    const previewResult = await callAI([{ role: 'user', content: previewPrompt }], 100000, command);
-
-    // استخراج خطة JSON من الرد
-    let plan = null;
-    try {
-      const jsonBlock = previewResult.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonBlock) plan = JSON.parse(jsonBlock[1]);
-    } catch { }
-
-    if (isReport) {
-      plan = { ...(plan || {}), ...createReportPlan(command) };
-    }
-
-    // إرجاع الخطة بدون كتابة أي ملف
-    res.json({ success: true, preview: previewResult, plan, projectStructure: structure });
+    res.json({
+      success: true,
+      mode: preview.mode,
+      plan: preview.plan,
+      eng1Result: preview.eng1Result,
+      eng2Result: preview.eng2Result,
+      frameworks: preview.snapshot?.frameworks,
+      preview: `## Brain Decision\n${preview.plan.decision}\n\n## Rejected\n${preview.plan.rejected || 'None'}\n\n## Tasks\n${
+        preview.plan.tasks?.filter(t => t.active).map(t => `- Leg ${t.leg}: ${t.task}`).join('\n') || ''
+      }`,
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// Parallel execution route — Brain Controller v3
 app.post('/api/octopus/parallel', aiLimiter, async (req, res) => {
   try {
-    const { command, sessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '', confirmed = false, plan: approvedPlan = null } = req.body;
+    const {
+      command,
+      sessionId = 'default',
+      activeFile = '',
+      activeFileContent = '',
+      projectDir = '',
+      confirmed = false,
+      plan: approvedPlan = null,
+    } = req.body;
 
-    // يجب تأكيد الخطة أولاً عبر /api/octopus/preview
     if (!confirmed) {
       return res.status(400).json({
         success: false,
-        error: 'يجب تأكيد الخطة أولاً. استخدم /api/octopus/preview لعرض الخطة، ثم أرسل confirmed: true لتنفيذها.',
+        error: 'Plan must be confirmed first. Use /api/octopus/preview then send confirmed: true',
         requiresConfirmation: true,
       });
     }
 
-    // استخدام الخطة المعتمدة من preview إذا وُجدت، وإلا أنشئ خطة افتراضية
-    let plan;
-    if (approvedPlan && Array.isArray(approvedPlan.tasks) && approvedPlan.tasks.length > 0) {
-      plan = approvedPlan;
-    } else {
-      plan = createEightLegPlan(command);
-    }
+    const updates = [];
+    const onUpdate = (entry) => {
+      updates.push(entry);
+      const label = entry.legId === 0 ? '🧠 Brain' : `🦾 Leg ${entry.legId}`;
+      console.log(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
+    };
 
-    const isReport = plan.reportMode === true || isReportCommand(command);
-    const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: null };
-    if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
-    const projectRoot = binding.projectRoot;
-    if (isReport && !hasUsableProjectMap(projectRoot)) {
-      return res.status(400).json({
-        success: false,
-        error: 'لا يمكن إنشاء report.md بدون خريطة مشروع صالحة. افتح مجلد المشروع من جديد ثم أعد التنفيذ.',
-      });
-    }
+    const result = await runBrainController({
+      command,
+      projectDir,
+      activeFile,
+      activeFileContent,
+      callAI,
+      onUpdate,
+    });
 
-    if (!Array.isArray(plan.tasks)) {
-      plan.tasks = [];
-    }
-
-    if (isReport) {
-      plan.reportMode = true;
-      plan.tasks = createReportPlan(command).tasks;
-    } else {
-      // إجبار 8 أرجل دائماً في وضع التنفيذ العادي فقط
-      const allLegs = [
-        { leg: 1, name: "رجل الكتابة" },
-        { leg: 2, name: "رجل الفحص" },
-        { leg: 3, name: "رجل التعديل" },
-        { leg: 4, name: "رجل الاختبار" },
-        { leg: 5, name: "رجل الإدارة" },
-        { leg: 6, name: "رجل التوليد" },
-        { leg: 7, name: "رجل التحديث" },
-        { leg: 8, name: "رجل الدمج" },
-      ];
-
-      allLegs.forEach(leg => {
-        if (!plan.tasks.find(task => Number(task.leg) === leg.leg)) {
-          plan.tasks.push({
-            leg: leg.leg,
-            name: leg.name,
-            task: `مساعدة في: ${command}`,
-            prompt: `ساعد في تنفيذ هذا الطلب من منظور ${leg.name}: ${command}`
-          });
-        }
-      });
-
-      plan.tasks = plan.tasks
-        .filter(task => Number(task.leg) >= 1 && Number(task.leg) <= 8)
-        .sort((a, b) => Number(a.leg) - Number(b.leg))
-        .slice(0, 8);
-    }
-
-    if (String(plan.terminal || '').toLowerCase() === 'null') {
-      plan.terminal = null;
-    }
-
-    const brain = createBrainController({ command, projectDir: projectRoot || projectDir, plan, activeFile });
-
-    if (plan.reportMode === true) {
-      const analysisTask = plan.tasks[0];
-      const reportTask = plan.tasks[1];
-      const analysisResult = buildProjectUnderstanding(projectRoot);
-      const finalResult = normalizeReportResult('', command, analysisResult, projectRoot || projectDir);
-      const savedFiles = saveTaggedFiles(finalResult, projectRoot || projectDir, ['report.md']);
-      const verifiedFiles = verifySavedFiles(savedFiles);
-
-      return res.json({
-        success: true,
-        result: finalResult,
-        plan,
-        legResults: [
-          { leg: analysisTask.leg, task: analysisTask.task, result: analysisResult },
-          { leg: reportTask.leg, task: reportTask.task, result: finalResult },
-        ],
-        terminalCommand: null,
-        sessionId,
-        savedFiles,
-        verifiedFiles,
-        brain,
-      });
-    }
-
-    // تقسيم المهام لمجموعتين من 4 تعملان بالتوازي
-    const chunk1 = plan.tasks.slice(0, 4);
-    const chunk2 = plan.tasks.slice(4, 8);
-
-    const runChunk = async (chunk) => Promise.all(chunk.map(async (task) => {
-      try {
-        const directive = getDirective(brain, task.leg);
-        const systemMsg = buildLegSystemPrompt(task, directive);
-        const taskFileContent = readTaskFiles(projectDir, task, activeFile, activeFileContent);
-
-        const result = await callAI([
-          { role: 'system', content: systemMsg },
-          {
-            role: 'user',
-            content: projectContext
-              ? `${brain.summary}\n\nملفات المشروع المفتوحة:\n${projectContext}\n\n${taskFileContent}\n\nالمطلوب: ${task.prompt}`
-              : activeFileContent
-                ? `${brain.summary}\n\n${taskFileContent}\n\nالمطلوب: ${task.prompt}`
-                : `${brain.summary}\n\n${taskFileContent}\n\nالمطلوب: ${task.prompt}`
-          }
-        ], 100000, command);
-        return {
-          leg: task.leg,
-          task: task.task,
-          result,
-          directive,
-          validation: validateLegResult(result, directive?.allowedFiles || [], projectRoot || projectDir),
-        };
-      } catch (e) {
-        return { leg: task.leg, task: task.task, result: '' };
-      }
-    }));
-
-    const [results1, results2] = await Promise.all([runChunk(chunk1), runChunk(chunk2)]);
-    const results = [...results1, ...results2];
-
-    // جمع نتائج التحقق من Validator Layer
-    const validationResults = {};
-    const decisions = {};
-    for (const result of results) {
-      validationResults[result.leg] = result.validation;
-      // اتخاذ القرار من Validator Layer فقط
-      decisions[result.leg] = makeLegDecision(result.validation, result.directive);
-    }
-
-    // المرحلة الثالثة: رجل الدمج يجمع النتائج
-    const mergeGovernance = buildMergeGovernance(brain, results, validationResults, decisions);
-    const mergePrompt = plan.reportMode === true
-      ? `اجمع كل أقسام report.md في ملف واحد.
-
-${mergeGovernance}
-
-${results.map(r => r.result).join('\n\n---\n\n')}
-
-القواعد:
-- ممنوع أي كود برمجي
-- اجمع كل أقسام report.md في ملف واحد
-- ممنوع أي ملف غير report.md
-- ممنوع وسوم <terminal>
-- الناتج النهائي: <file path="report.md">...</file> فقط
-- داخل وسم file اكتب نصاً عربياً فقط
-
-الناتج النهائي يجب أن يكون بهذا الشكل فقط:
-<file path="report.md">
-[كل الأقسام المدمجة هنا]
-</file>`
-      : `اجمع نتائج الأرجل في ملفات منفصلة:
-
-${mergeGovernance}
-
-الطلب: ${command}
-
-${results.map(r => `### رجل ${r.leg}:\n${r.result}`).join('\n\n')}
-
-قواعد:
-- كل ملف في وسم <file path="المسار الصحيح">
-- لا تستخدم إلا الملفات المسموحة في Brain Controller
-- لا ملفات Python أو bash إلا إذا طُلب
-- لا تعدل App.jsx أو package.json أو ملفات أخطبوط نفسه`;
-
-    const finalResult = await callAI([
-      {
-        role: 'system',
-        content: `أنت Brain Controller النهائي. أنت الحاكم الأعلى على نتائج الأرجل.
-ادمج فقط ما يطابق allowedFiles وتجاهل أي نتيجة تخالف تقرير الرقابة.
-لا تنشئ ملفات جديدة من نفسك.`
-      },
-      { role: 'user', content: mergePrompt }
-    ], 100000, command);
-    const finalAllowedFiles = plan.reportMode
-      ? ['report.md']
-      : brain.allowedFiles;
-    const savedFiles = saveTaggedFiles(finalResult, projectDir, finalAllowedFiles);
-    const verifiedFiles = verifySavedFiles(savedFiles);
-
-    const terminalMatch = finalResult.match(/<terminal>(.*?)<\/terminal>/s);
-    const terminalCommand = terminalMatch ? terminalMatch[1].trim() : (plan.terminal || null);
+    if (!sessions[sessionId]) sessions[sessionId] = [];
+    sessions[sessionId].push({ role: 'user', content: command });
+    sessions[sessionId].push({ role: 'assistant', content: result.finalResult });
+    if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
 
     res.json({
       success: true,
-      result: finalResult,
-      plan: plan,
-      legResults: results,
-      terminalCommand,
+      result: result.finalResult,
+      mode: result.mode,
+      plan: result.plan,
+      legResults: result.legResults.map(r => ({
+        leg: r.legId,
+        task: result.plan?.tasks?.find(t => t.leg === r.legId)?.task || '',
+        result: r.result,
+        error: r.error,
+      })),
+      savedFiles: result.savedFiles.map(f => ({
+        name: require('path').basename(f.path),
+        path: f.absolutePath || require('path').resolve(projectDir || process.cwd(), f.path),
+        relativePath: f.path,
+        size: f.size,
+      })),
+      rejectedFiles: result.rejectedFiles,
+      terminalCommands: result.terminalCommands,
+      terminalCommand: result.terminalCommands?.[0] || null,
+      timeline: result.timeline,
       sessionId,
-      savedFiles,
-      verifiedFiles,
-      brain,
-      mergeGovernance,
     });
 
   } catch (error) {

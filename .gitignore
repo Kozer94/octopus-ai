@@ -24,3 +24,6 @@ _fix*.js
 structure.txt
 project-reading-system-report.txt
 *.tmp
+
+# Claude Code local memory
+.claude/
