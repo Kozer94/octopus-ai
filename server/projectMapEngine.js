@@ -541,9 +541,13 @@ function tokenize(text) {
 function scoreFile(file, tokens, map) {
   const lowerPath = file.path.toLowerCase();
   const base = file.name.toLowerCase();
+  const isReportRequest = tokens.some(token =>
+    ['تقرير', 'شامل', 'فحص', 'analyze', 'report'].includes(token)
+  );
   let score = 0;
 
   if (file.important) score += 8;
+  if (isReportRequest && lowerPath.startsWith('server/')) score += 8;
   if (map.routes.includes(file.path)) score += 6;
   if (map.configFiles.includes(file.path)) score += 3;
 

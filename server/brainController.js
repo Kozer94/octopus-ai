@@ -56,11 +56,13 @@ const LEG_DEFINITIONS = {
 };
 
 // ─── System Prompts ───────────────────────────────────────────
-function buildEngineer1Prompt() {
+function buildEngineer1Prompt(activeFile = '[activeFile]') {
   return `أنت المهندس التقني الأول في نظام أخطبوط.
 مهمتك: تحليل المشروع وجلب أفكار تقنية واقعية.
 
 قواعد صارمة:
+- الملف المفتوح حالياً هو: ${activeFile || '[activeFile]'}
+- عدّل هذا الملف فقط — لا تعدل أي ملف آخر إلا إذا طلب المستخدم صراحةً.
 - اقرأ الملفات الموجودة فعلاً فقط
 - لا تخمّن ملفات غير موجودة
 - لا تكتب كوداً — أفكار نصية فقط
@@ -100,9 +102,13 @@ function buildEngineer2Prompt() {
 - تحسين 1: [الفائدة المتوقعة]`;
 }
 
-function buildBrainPrompt(command, eng1Result, eng2Result, snapshot) {
+function buildBrainPrompt(command, eng1Result, eng2Result, snapshot, activeFile) {
   const mode = detectMode(command);
   const isReport = mode === MODES.REPORT;
+
+  const activeFileRule = activeFile
+    ? `⚠️ STRICT: عدّل ملف واحد فقط: "${activeFile}" — لا غيره.`
+    : '';
 
   const reportInstructions = isReport ? `
 ⚠️ هذا طلب تقرير/تحليل — ليس بناء كود.
@@ -115,7 +121,9 @@ function buildBrainPrompt(command, eng1Result, eng2Result, snapshot) {
 - الملف الوحيد المسموح: report.md
 ` : '';
 
-  return `أنت العقل المدبر في نظام أخطبوط.
+  return `${activeFileRule}
+
+أنت العقل المدبر في نظام أخطبوط.
 لديك أفكار المهندسَين — قرارك نهائي.
 ${reportInstructions}
 المشروع: ${snapshot.summary.split('\n').slice(0, 5).join('\n')}
@@ -158,13 +166,15 @@ ${command}
 \`\`\``;
 }
 
-function buildLegExecutionPrompt(task, legDef, mode, sharedContext) {
+function buildLegExecutionPrompt(task, legDef, mode, sharedContext, activeFile = '[activeFile]') {
   const isReport = mode === MODES.REPORT;
 
   if (isReport) {
     return {
       system: `أنت ${legDef.name} في نظام أخطبوط. دورك: ${legDef.focus}
 قواعد لا تُكسر:
+- الملف المفتوح حالياً هو: ${activeFile || '[activeFile]'}
+- عدّل هذا الملف فقط — لا تعدل أي ملف آخر إلا إذا طلب المستخدم صراحةً.
 - اكتب بالعربية فقط
 - ممنوع أي كود Python أو bash أو JavaScript
 - ممنوع وسوم <file> أو <terminal>
@@ -177,7 +187,14 @@ function buildLegExecutionPrompt(task, legDef, mode, sharedContext) {
     system: `أنت ${legDef.name} في نظام أخطبوط. دورك: ${legDef.focus}
 قواعد:
 - نفّذ مهمتك المحددة فقط: ${task.task}
-- استخدم <file path="المسار"> لكل ملف تكتبه
+- الملف المفتوح حالياً هو: ${activeFile || '[activeFile]'}
+- عدّل هذا الملف فقط — لا تعدل أي ملف آخر إلا إذا طلب المستخدم صراحةً.
+- عند تعديل ملف موجود، استخدم هذا الشكل فقط:
+<edit path="المسار">
+<old>النص القديم المطابق تماماً</old>
+<new>النص الجديد</new>
+</edit>
+- عند إنشاء ملف جديد فقط استخدم <file path="...">
 - استخدم <terminal> للأوامر فقط إذا ضروري
 - لا تعيد تحليل المشروع — البيانات موجودة أمامك`,
     user: `${sharedContext}\n\n---\nمهمتك المحددة: ${task.task}\nالملف المستهدف: ${task.file || 'حسب الحاجة'}\n\n${task.prompt}`,
@@ -225,7 +242,12 @@ ${legResults.filter(r => r.result).map(r =>
 ).join('\n\n')}
 
 القواعد:
-- كل ملف في <file path="المسار الصحيح">
+- عند تعديل ملف موجود، استخدم هذا الشكل فقط:
+<edit path="المسار">
+<old>النص القديم المطابق تماماً</old>
+<new>النص الجديد</new>
+</edit>
+- عند إنشاء ملف جديد فقط استخدم <file path="...">
 - لا تعدّل الملفات المحمية (App.jsx, main.js, package.json...)
 - استخدم <terminal> فقط إذا مطلوب تثبيت packages
 - اجمع فقط — لا تعيد التفكير`;
@@ -262,7 +284,7 @@ async function runBrainController({
 
   const [eng1Result, eng2Result] = await Promise.all([
     callAI([
-      { role: 'system', content: buildEngineer1Prompt() },
+      { role: 'system', content: buildEngineer1Prompt(activeFile) },
       { role: 'user',   content: `${snapshot.summary}\n\n${baseContext}\n\nطلب المستخدم: ${command}` },
     ]).then(r => { tick(1, 'ideas_ready'); return r; }),
 
@@ -276,7 +298,7 @@ async function runBrainController({
   tick(0, 'brain_deciding');
   const brainRaw = await callAI([{
     role: 'user',
-    content: buildBrainPrompt(command, eng1Result, eng2Result, snapshot),
+    content: buildBrainPrompt(command, eng1Result, eng2Result, snapshot, activeFile),
   }]);
 
   let plan;
@@ -358,7 +380,7 @@ async function runBrainController({
         } catch { /* تجاهل أخطاء القراءة */ }
       }
 
-      const { system, user } = buildLegExecutionPrompt(task, legDef, mode, contextForLeg);
+      const { system, user } = buildLegExecutionPrompt(task, legDef, mode, contextForLeg, activeFile);
       const result = await callAI([
         { role: 'system', content: system },
         { role: 'user',   content: user },
@@ -431,7 +453,7 @@ async function previewBrainController({ command, projectDir, callAI }) {
 
   const brainRaw = await callAI([{
     role: 'user',
-    content: buildBrainPrompt(command, eng1, eng2, snapshot),
+    content: buildBrainPrompt(command, eng1, eng2, snapshot, activeFile),
   }]);
 
   let plan;

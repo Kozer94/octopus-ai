@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "vite & electron .",
+    "test": "node --test \"src/**/*.test.js\"",
     "build": "vite build",
     "dist": "vite build && electron-builder",
     "lint": "eslint .",

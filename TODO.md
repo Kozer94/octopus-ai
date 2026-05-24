@@ -2,6 +2,76 @@
 
 ## ✅ التحسينات المنفذة (آخر تحديث: 24 مايو 2026)
 
+<!-- OCTOPUS_AUTO_TODO_START -->
+## سجل التحديثات التلقائي
+
+- [2026-05-25 00:00:00 UTC] system:create `server/services/todoLogService.js` - إضافة نظام تسجيل تحديثات تلقائي داخل TODO.md
+- [2026-05-25 00:00:00 UTC] system:update `server/index.js` - ربط حفظ/حذف/إعادة تسمية الملفات بسجل TODO التلقائي
+- [2026-05-25 00:00:00 UTC] system:create `AGENTS.md` - إضافة تعليمات للمساعدين لتحديث TODO.md بعد التغييرات اليدوية
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/files.js` - استخراج routes الملفات من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/terminal.js` - استخراج routes الطرفية والتشغيل من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/git.js` - استخراج routes Git من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/workspace.js` - استخراج routes البحث ومراقبة الملفات من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/system.js` - استخراج route إظهار الملفات في Explorer من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/core.js` - استخراج health/root/project-map/reset routes من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/marketplace.js` - استخراج routes Marketplace من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/packages.js` - استخراج routes NPM/OpenVSX/extensions من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/plugins.js` - استخراج routes pluginManager من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/simplePlugins.js` - استخراج routes simple plugins من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:fix `server/services/stateService.js` - إصلاح /api/truth/state بإضافة خدمة حالة واختبارات مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/core.js` - نقل /api/truth/state إلى core routes بعد إصلاح stateService مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/routes/octopus.js` - استخراج routes /api/octopus وpreview وparallel من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/services/octopusConfig.js` - استخراج SYSTEM_PROMPT وisReportCommand من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/services/taggedFileService.js` - استخراج حفظ ملفات AI من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/services/aiService.js` - استخراج مزودي AI وcallAI من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:cleanup `server/index.js` - إزالة دوال مساعدة غير مستخدمة وتوحيد isSensitiveFile مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:create `server/services/jsonStoreService.js` - توحيد قراءة/كتابة JSON لحالة الإضافات والحزم مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:fix `server/services/jsonStoreService.js` - حفظ مراجع حالة الإضافات والحزم عند التحميل حتى ترى routes البيانات مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/services/packageIconService.js` - استخراج جلب أيقونات الحزم مع اختبارات وكاش ونجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `server/services/simplePluginRuntimeService.js` - استخراج تحميل simple plugins وتنفيذ hooks من server/index.js مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/config/uiConfig.js` - استخراج ثيمات الواجهة والأرجل وtyping snippets من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/fileIcons.js` - استخراج منطق أيقونات الملفات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/editorLanguage.js` - استخراج تحديد لغة Monaco من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/diffUtils.js` - استخراج diff helpers وتنظيف نص المحادثة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/FileTreeNode.jsx` - استخراج شجرة الملفات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/OctopusWorking.jsx` - استخراج مؤشر عمل الأخطبوط وTypingCode من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/pathDisplay.js` - استخراج تنسيق مسار الملف وقائمة النشاطات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/ActivityBar.jsx` - استخراج شريط النشاط الجانبي من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/ExplorerPanel.jsx` - استخراج لوحة Explorer من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/SearchPanel.jsx` - استخراج لوحة البحث من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/GitPanel.jsx` - استخراج لوحة Git من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/ExtensionsPanel.jsx` - استخراج لوحة Extensions من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/RightPanel.jsx` - استخراج right panel لتبويبات Chat/Legs/Context/History من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/TerminalPanel.jsx` - استخراج لوحة Terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/DiffApprovalModal.jsx` - استخراج نافذة قبول تعديلات الملفات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/TerminalApprovalModal.jsx` - استخراج نافذة قبول أوامر Terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/StatusBar.jsx` - استخراج شريط الحالة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/TitleBar.jsx` - استخراج شريط العنوان والقوائم من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/EditorWorkspace.jsx` - استخراج tabs وbreadcrumb ومحرر Monaco وتفاصيل الإضافات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/panelResize.js` - استخراج منطق resize للـ sidebar والـ terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/hooks/useAppShortcuts.js` - استخراج اختصارات Ctrl+P وCtrl+B وCtrl+` من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/services/apiClient.js` - استخراج نداءات الملفات والبحث وGit والإضافات من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/services/apiClient.js` - نقل نداءات terminal/run/reset وOctopus AI من App.jsx إلى apiClient مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/editorDiffDecorations.js` - استخراج منطق تلوين diff داخل Monaco من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/projectRunCommand.js` - استخراج اكتشاف أمر تشغيل المشروع من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/legState.js` - استخراج تحديثات حالة الأرجل من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/openFilesState.js` - استخراج تحديثات قائمة الملفات المفتوحة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/components/SidebarShell.jsx` - استخراج غلاف وهيدر sidebar من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/octopusPromptContext.js` - استخراج بناء سياق الملفات واكتشاف مهام Octopus المعقدة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/hooks/useAutoScroll.js` - استخراج auto-scroll للرسائل والـ terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/recentProjects.js` - استخراج اسم المجلد وإضافة المشاريع الحديثة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/terminalHistory.js` - استخراج بناء رسائل terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/hooks/useTerminalApprovals.js` - استخراج queue/approve/reject لأوامر terminal من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/octopusResponse.js` - استخراج parsing لأوامر terminal وsavedFiles من ردود Octopus مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/services/octopusSavedFiles.js` - استخراج فتح ملفات AI المحفوظة وتجهيز مراجعة diff من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/utils/chatMessages.js` - استخراج بناء رسائل chat الثابتة والمتكررة من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:refactor `client/src/hooks/useOctopusWorkflow.js` - استخراج send وexecuteApprovedPlan وcancel/reset من App.jsx مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:test `client/src/utils/*.test.js` - إضافة اختبارات Node للـ client utilities وربطها بـ npm run check مع نجاح 12 اختبار عميل و36 اختبار سيرفر
+- [2026-05-25 00:00:00 UTC] system:fix `client/src/App.jsx` - استرجاع نوع رسائل terminal عند run/stop للسلوك الأصلي مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:docs `REPORT.md` - تحديث وصف بنية client/server بعد استخراج routes وcomponents/hooks/services مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:test `client/src/utils/uiMessagesAndPaths.test.js` - إضافة اختبارات لرسائل chat/terminal وتنسيق المسارات مع نجاح 16 اختبار عميل و36 اختبار سيرفر
+<!-- OCTOPUS_AUTO_TODO_END -->
+
 ### 1. الأمان
 - ✅ إزالة API Keys الحقيقية من `.env` واستبدالها بعناصر نائبة
 - ✅ إضافة `.env.example` مع تعليمات الإعداد

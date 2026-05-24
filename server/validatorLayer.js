@@ -69,22 +69,101 @@ function safeWrite(projectDir, relPath, content) {
   }
 }
 
+function buildLineDiff(oldContent, newContent) {
+  const oldLines = oldContent === '' ? [] : oldContent.split(/\r?\n/);
+  const newLines = newContent === '' ? [] : newContent.split(/\r?\n/);
+  const table = Array.from({ length: oldLines.length + 1 }, () =>
+    Array(newLines.length + 1).fill(0)
+  );
+
+  for (let i = oldLines.length - 1; i >= 0; i--) {
+    for (let j = newLines.length - 1; j >= 0; j--) {
+      table[i][j] = oldLines[i] === newLines[j]
+        ? table[i + 1][j + 1] + 1
+        : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+
+  const diff = [];
+  let i = 0;
+  let j = 0;
+  while (i < oldLines.length && j < newLines.length) {
+    if (oldLines[i] === newLines[j]) {
+      i++;
+      j++;
+    } else if (table[i + 1][j] >= table[i][j + 1]) {
+      diff.push(`- ${oldLines[i++]}`);
+    } else {
+      diff.push(`+ ${newLines[j++]}`);
+    }
+  }
+  while (i < oldLines.length) diff.push(`- ${oldLines[i++]}`);
+  while (j < newLines.length) diff.push(`+ ${newLines[j++]}`);
+
+  return diff;
+}
+
 // ─── استخراج وكتابة الملفات من رد AI ────────────────────────
 function extractAndWrite(aiResponse, projectDir) {
   const written = [];
   const rejected = [];
   const fileMatches = [...aiResponse.matchAll(/<file path="([^"]+)">([\s\S]*?)<\/file>/g)];
+  const editMatches = [...aiResponse.matchAll(/<edit path="([^"]+)">[\s\S]*?<old>([\s\S]*?)<\/old>[\s\S]*?<new>([\s\S]*?)<\/new>[\s\S]*?<\/edit>/g)];
+  const rootDir = path.resolve(projectDir || process.cwd());
 
   for (const match of fileMatches) {
     const relPath = match[1].trim();
     const content = match[2].trim();
     if (relPath.toLowerCase() === 'terminal') continue;
-    const result = safeWrite(projectDir, relPath, content);
-    if (result.success) {
-      written.push({ path: relPath, size: content.length });
-    } else {
-      rejected.push({ path: relPath, reason: result.reason });
+    const check = validateWrite(relPath, rootDir);
+    if (!check.ok) {
+      rejected.push({ path: relPath, reason: check.reason });
+      continue;
     }
+    const fullPath = path.resolve(rootDir, relPath);
+    const oldContent = fs.existsSync(fullPath) ? fs.readFileSync(fullPath, 'utf8') : null;
+    if (oldContent !== null) {
+      rejected.push({ path: relPath, reason: 'استخدم <edit> لتعديل ملف موجود' });
+      continue;
+    }
+    const diffLines = buildLineDiff(oldContent || '', content);
+    written.push({
+      path: relPath,
+      size: content.length,
+      oldContent: oldContent || null,
+      newContent: content,
+      diff: diffLines
+    });
+  }
+
+  for (const match of editMatches) {
+    const relPath = match[1].trim();
+    const oldPart = match[2];
+    const newPart = match[3];
+    const check = validateWrite(relPath, rootDir);
+    if (!check.ok) {
+      rejected.push({ path: relPath, reason: check.reason });
+      continue;
+    }
+    const fullPath = path.resolve(rootDir, relPath);
+    if (!fs.existsSync(fullPath)) {
+      rejected.push({ path: relPath, reason: 'الملف غير موجود، استخدم <file> لإنشاء ملف جديد' });
+      continue;
+    }
+    const oldContent = fs.readFileSync(fullPath, 'utf8');
+    if (!oldContent.includes(oldPart)) {
+      rejected.push({ path: relPath, reason: 'النص القديم غير مطابق داخل الملف' });
+      continue;
+    }
+    const content = oldContent.replace(oldPart, newPart);
+    const diffLines = buildLineDiff(oldContent, content);
+    written.push({
+      path: relPath,
+      size: content.length,
+      oldContent: oldContent || null,
+      newContent: content,
+      diff: diffLines
+    });
   }
 
   return { written, rejected };

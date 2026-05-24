@@ -5,7 +5,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"cd client && npm run dev\" \"wait-on http://localhost:5173 && electron .\""
+    "dev": "concurrently \"cd client && npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "test": "cd server && npm test && cd ../client && npm test",
+    "lint": "cd client && npm run lint",
+    "build": "cd client && npm run build",
+    "check": "npm run test && npm run lint && npm run build"
   },
   "keywords": [],
   "author": "",
