@@ -1,10 +1,26 @@
+# Dependencies
 node_modules/
-.env
-*.env
-server/.env
 server/node_modules/
-.vscode/
-dist/
+client/node_modules/
+
+# Build output
 client/dist/
-dev.log
-dev.err.log
+dist/
+
+# Environment
+.env
+server/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp / junk files
+_fix*.js
+structure.txt
+project-reading-system-report.txt
+*.tmp

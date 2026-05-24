@@ -246,9 +246,9 @@ function TypingCode() {
 }
 
 export default function App() {
-  const [files, setFiles] = useState([{ name: "App.jsx", content: "// ابدأ بكتابة أمرك لأخطبوط\n" }]);
+  const [files, setFiles] = useState([]);
   const [fileTree, setFileTree] = useState([]);
-  const [activeFile, setActiveFile] = useState("App.jsx");
+  const [activeFile, setActiveFile] = useState("");
   const [legs, setLegs] = useState(INITIAL_LEGS);
   const [messages, setMessages] = useState([{ role: "octopus", text: "مرحباً 🐙 أنا جاهز. أخبرني ماذا تريد أن تبني." }]);
   const [input, setInput] = useState("");
@@ -274,6 +274,13 @@ export default function App() {
   const [gitLoading, setGitLoading] = useState(false);
   const [projects, setProjects] = useState([]);
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState(null);
+  const [awaitingConfirm, setAwaitingConfirm] = useState(false);
+  const [extSearchQuery, setExtSearchQuery] = useState('');
+  const [extSearchResults, setExtSearchResults] = useState([]);
+  const [extSearching, setExtSearching] = useState(false);
+  const [installedExtensions, setInstalledExtensions] = useState([]);
+  const [selectedExtension, setSelectedExtension] = useState(null);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
   const t = THEMES[theme];
@@ -327,13 +334,14 @@ export default function App() {
     setCurrentDir(folderPath);
     const res = await fetch(`${BACKEND}/api/files/list`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dirPath: folderPath }) });
     const data = await res.json();
-    if (data.success) { setFileTree(data.items); setFiles([]); setGitFiles([]); }
+    if (data.success) { setFileTree(data.items); setFiles([]); setActiveFile(''); setGitFiles([]); }
   }
 
   async function switchProject(project) {
     setProjectName(project.name);
     setCurrentDir(project.path);
     setFiles([]);
+    setActiveFile('');
     setGitFiles([]);
     setProjectsOpen(false);
     const res = await fetch(`${BACKEND}/api/files/list`, {
@@ -472,81 +480,130 @@ export default function App() {
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
+    if (awaitingConfirm) {
+      setMessages(prev => [...prev, { role: "octopus", text: "⏳ انتظر — يجب تأكيد الخطة الحالية أو إلغاؤها أولاً." }]);
+      return;
+    }
     setInput("");
     setMessages(prev => [...prev, { role: "user", text }]);
     setLoading(true);
     resetLegs();
-    activateLeg(1, "تحلل الطلب...");
-    activateLeg(2, "تفحص الملفات...");
-    const currentFile = files.find(f => f.name === activeFile);
+
+    const openFilesContext = files
+      .filter(f => f.content)
+      .slice(0, 5)
+      .map(f => `### ${f.name}:\n\`\`\`\n${f.content?.slice(0, 500)}\n\`\`\``)
+      .join('\n\n');
+
+    const isComplexTask = text.length > 20;
+
+    if (!isComplexTask) {
+      activateLeg(1, "تحلل الطلب...");
+      const currentFile = files.find(f => f.name === activeFile);
+      try {
+        const res = await fetch(`${BACKEND}/api/octopus`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "", projectContext: openFilesContext, projectDir: currentDir }) });
+        const data = await res.json();
+        if (data.terminalCommand) { setTerminalOpen(true); await runCommand(data.terminalCommand); }
+        if (data.success) {
+          const terminalMatch = data.result.match(/<terminal>(.*?)<\/terminal>/s);
+          if (terminalMatch) await runCommand(terminalMatch[1].trim());
+          const code = extractCode(data.result);
+          if (code) setFiles(prev => { const exists = prev.find(f => f.name === activeFile); if (exists) return prev.map(f => f.name === activeFile ? { ...f, content: code } : f); return [...prev, { name: activeFile, content: code }]; });
+          completeLeg(1);
+          setMessages(prev => [...prev, { role: "octopus", text: data.result }]);
+        } else { setMessages(prev => [...prev, { role: "octopus", text: `خطأ: ${data.error}` }]); resetLegs(); }
+      } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
+      setLoading(false);
+      return;
+    }
+
+    // المهام المعقدة: preview أولاً قبل التنفيذ
+    activateLeg(1, "يفحص المشروع...");
+    activateLeg(2, "يضع الخطة...");
+    setMessages(prev => [...prev, { role: "octopus", text: "🔍 أخطبوط يفحص المشروع ويضع خطة التنفيذ..." }]);
+
     try {
-      const isComplexTask = text.length > 20;
-      const endpoint = isComplexTask ? '/api/octopus/parallel' : '/api/octopus';
-      const res = await fetch(`${BACKEND}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: text, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "", projectDir: currentDir }) });
+      const res = await fetch(`${BACKEND}/api/octopus/preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: text, projectDir: currentDir }),
+      });
       const data = await res.json();
-      if (data.terminalCommand) {
-        setTerminalOpen(true);
-        await runCommand(data.terminalCommand);
+      completeLeg(1); completeLeg(2);
+      if (data.success) {
+        setMessages(prev => [...prev, { role: "octopus", text: data.preview }]);
+        setPendingPlan({ plan: data.plan, command: text, openFilesContext });
+        setAwaitingConfirm(true);
+      } else {
+        setMessages(prev => [...prev, { role: "octopus", text: `خطأ في الفحص: ${data.error}` }]);
+        resetLegs();
       }
-      // فتح الملفات المحفوظة تلقائياً
+    } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
+    setLoading(false);
+  }
+
+  async function executeApprovedPlan() {
+    if (!pendingPlan) return;
+    const { command, plan, openFilesContext } = pendingPlan;
+    setAwaitingConfirm(false);
+    setPendingPlan(null);
+    setLoading(true);
+    resetLegs();
+    const currentFile = files.find(f => f.name === activeFile);
+
+    if (plan && plan.tasks) {
+      plan.tasks.forEach(task => activateLeg(task.leg, task.task));
+    } else {
+      activateLeg(1, "تكتب الكود..."); activateLeg(2, "تفحص...");
+    }
+
+    try {
+      const res = await fetch(`${BACKEND}/api/octopus/parallel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command, sessionId: SESSION_ID, activeFile, activeFileContent: currentFile?.content || "", projectContext: openFilesContext, projectDir: currentDir, confirmed: true, plan }),
+      });
+      const data = await res.json();
+
+      if (data.terminalCommand) { setTerminalOpen(true); await runCommand(data.terminalCommand); }
+
       if (data.savedFiles && data.savedFiles.length > 0) {
         for (const file of data.savedFiles) {
-          const res2 = await fetch(`${BACKEND}/api/files/read`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filePath: file.path }),
-          });
+          const res2 = await fetch(`${BACKEND}/api/files/read`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filePath: file.path }) });
           const fileData = await res2.json();
           if (fileData.success) {
-            setFiles(prev => {
-              const exists = prev.find(f => f.path === file.path);
-              if (exists) return prev.map(f => f.path === file.path ? { ...f, content: fileData.content } : f);
-              return [...prev, { name: file.name, path: file.path, content: fileData.content }];
-            });
+            setFiles(prev => { const exists = prev.find(f => f.path === file.path); if (exists) return prev.map(f => f.path === file.path ? { ...f, content: fileData.content } : f); return [...prev, { name: file.name, path: file.path, content: fileData.content }]; });
             setActiveFile(file.name);
           }
         }
-
         if (currentDir) {
-          fetch(`${BACKEND}/api/files/list`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dirPath: currentDir }),
-          }).then(r => r.json()).then(d => {
-            if (d.success) setFileTree(d.items);
-          });
+          fetch(`${BACKEND}/api/files/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dirPath: currentDir }) })
+            .then(r => r.json()).then(d => { if (d.success) setFileTree(d.items); });
         }
       }
-      // عرض خطة الأرجل إذا كان parallel
-      if (data.plan) {
-        data.plan.tasks.forEach(task => {
-          activateLeg(task.leg, task.task);
-        });
-        setMessages(prev => [...prev, {
-          role: 'octopus',
-          text: `🐙 خطة العمل:\n${data.plan.tasks.map(t => `• ${t.name}: ${t.task}`).join('\n')}\n\n${data.plan.summary}`
-        }]);
-      }
-      completeLeg(1); completeLeg(2);
-      activateLeg(3, "تعدّل الكود..."); activateLeg(6, "تولّد الكود...");
+
       if (data.success) {
         const terminalMatch = data.result.match(/<terminal>(.*?)<\/terminal>/s);
-        if (terminalMatch) { await runCommand(terminalMatch[1].trim()); }
+        if (terminalMatch) await runCommand(terminalMatch[1].trim());
         setTimeout(async () => {
-          completeLeg(3); completeLeg(6); activateLeg(8, "تدمج النتائج...");
           const code = extractCode(data.result);
           if (code) {
             setFiles(prev => { const exists = prev.find(f => f.name === activeFile); if (exists) return prev.map(f => f.name === activeFile ? { ...f, content: code } : f); return [...prev, { name: activeFile, content: code }]; });
-            if (currentFile?.path) {
-              await fetch(`${BACKEND}/api/files/write`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filePath: currentFile.path, content: code }) });
-            }
+            if (currentFile?.path) await fetch(`${BACKEND}/api/files/write`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filePath: currentFile.path, content: code }) });
           }
-          setTimeout(() => completeLeg(8), 600);
+          legs.forEach(l => completeLeg(l.id));
           setMessages(prev => [...prev, { role: "octopus", text: data.result }]);
         }, 800);
       } else { setMessages(prev => [...prev, { role: "octopus", text: `خطأ: ${data.error}` }]); resetLegs(); }
     } catch { setMessages(prev => [...prev, { role: "octopus", text: "⚠️ تعذّر الاتصال بالخادم." }]); resetLegs(); }
     setLoading(false);
+  }
+
+  function cancelPlan() {
+    setMessages(prev => [...prev, { role: "octopus", text: "تم الإلغاء 🐙" }]);
+    setPendingPlan(null);
+    setAwaitingConfirm(false);
+    resetLegs();
   }
 
   async function reset() {
@@ -557,6 +614,59 @@ export default function App() {
   function onKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }
   const currentFile = files.find(f => f.name === activeFile);
   const legColor = (s) => s === "done" ? "#3fb950" : s === "working" ? "#f0883e" : t.textMuted;
+
+  async function searchExtensions(query) {
+    if (!query.trim()) {
+      setExtSearchResults([]);
+      return;
+    }
+    setExtSearching(true);
+    try {
+      const res = await fetch(`${BACKEND}/api/vsx-search?q=${encodeURIComponent(query)}&size=20`);
+      const data = await res.json();
+      setExtSearchResults(data.extensions || []);
+    } catch (error) {
+      console.error('Failed to search extensions:', error);
+      setExtSearchResults([]);
+    }
+    setExtSearching(false);
+  }
+
+  async function installExtension(extension) {
+    try {
+      const res = await fetch(`${BACKEND}/api/extensions/install`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extension }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setInstalledExtensions(prev => [...prev, extension]);
+      }
+    } catch (error) {
+      console.error('Failed to install extension:', error);
+    }
+  }
+
+  async function uninstallExtension(extensionId) {
+    try {
+      const res = await fetch(`${BACKEND}/api/extensions/uninstall`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extensionId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setInstalledExtensions(prev => prev.filter(ext => ext.id !== extensionId));
+      }
+    } catch (error) {
+      console.error('Failed to uninstall extension:', error);
+    }
+  }
+
+  function isExtensionInstalled(extensionId) {
+    return installedExtensions.some(ext => ext.id === extensionId);
+  }
 
   const activityItems = [
     { id: 'explorer', icon: 'codicon-files', title: 'مستكشف الملفات' },
@@ -797,6 +907,93 @@ export default function App() {
               </div>
             </div>
           )}
+          {activeActivity === 'extensions' && (
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+              <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
+                <input
+                  style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none' }}
+                  placeholder="ابحث عن إضافة..."
+                  value={extSearchQuery}
+                  onChange={e => {
+                    setExtSearchQuery(e.target.value);
+                    searchExtensions(e.target.value);
+                  }}
+                  dir="auto"
+                />
+              </div>
+              <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
+                {extSearching && (
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>جاري البحث...</p>
+                )}
+                {!extSearching && extSearchResults.length === 0 && extSearchQuery === '' && (
+                  <div style={{ padding: 20, textAlign: 'center' }}>
+                    <div style={{ fontSize: 48, marginBottom: 12 }}>🧩</div>
+                    <h3 style={{ fontSize: 14, fontWeight: 600, color: t.text, margin: '0 0 8px' }}>
+                      سوق الإضافات
+                    </h3>
+                    <p style={{ fontSize: 11, color: t.textMuted, margin: '0 0 16px', lineHeight: 1.5 }}>
+                      ابحث عن إضافات VS Code لتثبيتها
+                    </p>
+                  </div>
+                )}
+                {!extSearching && extSearchResults.length === 0 && extSearchQuery !== '' && (
+                  <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>لا توجد نتائج</p>
+                )}
+                {extSearchResults.map((ext, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      borderBottom: `0.5px solid ${t.border}33`,
+                    }}
+                    onClick={() => setSelectedExtension(ext)}
+                    onMouseEnter={e => e.currentTarget.style.background = t.border + '44'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <img
+                      src={ext.icon || ext.files?.icon}
+                      alt={ext.name}
+                      style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'contain' }}
+                      onError={e => e.target.style.display = 'none'}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: t.text, fontWeight: 500, marginBottom: 2 }}>
+                        {ext.displayName || ext.name}
+                      </div>
+                      <div style={{ fontSize: 10, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {ext.description || ext.shortDescription}
+                      </div>
+                    </div>
+                    {isExtensionInstalled(ext.id) ? (
+                      <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 500 }}>✓ مثبت</span>
+                    ) : (
+                      <button
+                        style={{
+                          background: t.accent,
+                          border: 'none',
+                          borderRadius: 4,
+                          color: '#fff',
+                          padding: '4px 8px',
+                          fontSize: 10,
+                          cursor: 'pointer',
+                        }}
+                        onClick={e => {
+                          e.stopPropagation();
+                          installExtension(ext);
+                        }}
+                      >
+                        تثبيت
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Resize Handle */}
@@ -829,6 +1026,8 @@ export default function App() {
                       setFiles(remaining);
                       if (activeFile === f.name && remaining.length > 0) {
                         setActiveFile(remaining[remaining.length - 1].name);
+                      } else if (activeFile === f.name) {
+                        setActiveFile('');
                       }
                     }}
                     onMouseEnter={e => { e.currentTarget.style.background = t.border; e.currentTarget.style.opacity = 1; }}
@@ -849,14 +1048,139 @@ export default function App() {
 
           {/* Editor */}
           <div style={{ flex: 1, overflow: "hidden" }}>
-            <Editor
-              height="100%"
-              language={activeFile.endsWith(".jsx") || activeFile.endsWith(".js") ? "javascript" : activeFile.endsWith(".ts") || activeFile.endsWith(".tsx") ? "typescript" : activeFile.endsWith(".css") ? "css" : activeFile.endsWith(".html") ? "html" : activeFile.endsWith(".php") ? "php" : activeFile.endsWith(".py") ? "python" : activeFile.endsWith(".json") ? "json" : "plaintext"}
-              value={currentFile?.content || ""}
-              onChange={val => setFiles(prev => prev.map(f => f.name === activeFile ? { ...f, content: val } : f))}
-              theme={t.editorTheme}
-              options={{ fontSize: 13, minimap: { enabled: false }, scrollBeyondLastLine: false, fontFamily: "JetBrains Mono, Consolas, monospace", wordWrap: "on", lineNumbers: "on" }}
-            />
+            {selectedExtension ? (
+              <div style={{ padding: 40, overflowY: 'auto', height: '100%', position: 'relative' }}>
+                <button
+                  style={{ position: 'absolute', top: 20, right: 20, background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '8px 12px', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36 }}
+                  onClick={() => setSelectedExtension(null)}
+                  title="إغلاق"
+                >
+                  <i className="codicon codicon-close" style={{ fontSize: 16 }} />
+                </button>
+                
+                <div style={{ maxWidth: 800, margin: '0 auto' }}>
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
+                    <img
+                      src={selectedExtension.icon || selectedExtension.files?.icon}
+                      alt={selectedExtension.name}
+                      style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'contain' }}
+                      onError={e => e.target.style.display = 'none'}
+                    />
+                    <div>
+                      <h1 style={{ fontSize: 24, fontWeight: 600, color: t.text, marginBottom: 8 }}>
+                        {selectedExtension.displayName || selectedExtension.name}
+                      </h1>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 14, color: t.textMuted }}>
+                        <span>v{selectedExtension.version}</span>
+                        <span>👤 {selectedExtension.publisher || selectedExtension.namespace}</span>
+                        <span>⬇️ {selectedExtension.downloadCount || selectedExtension.downloads || 0} تحميل</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p style={{ fontSize: 14, color: t.text, lineHeight: 1.6, marginBottom: 24 }}>
+                    {selectedExtension.description || selectedExtension.shortDescription}
+                  </p>
+                  
+                  <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                    {isExtensionInstalled(selectedExtension.id) ? (
+                      <button
+                        style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => uninstallExtension(selectedExtension.id)}
+                      >
+                        ❌ إلغاء التثبيت
+                      </button>
+                    ) : (
+                      <button
+                        style={{ background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => installExtension(selectedExtension)}
+                      >
+                        📥 تثبيت الإضافة
+                      </button>
+                    )}
+                  </div>
+                  
+                  {selectedExtension.tags && selectedExtension.tags.length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 600, color: t.text, marginBottom: 12 }}>الوسوم</h3>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {selectedExtension.tags.map((tag, i) => (
+                          <span key={i} style={{ background: t.border, padding: '4px 12px', borderRadius: 12, fontSize: 12, color: t.textMuted }}>
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : activeFile && currentFile ? (
+              <Editor
+                height="100%"
+                language={activeFile.endsWith(".jsx") || activeFile.endsWith(".js") ? "javascript" : activeFile.endsWith(".ts") || activeFile.endsWith(".tsx") ? "typescript" : activeFile.endsWith(".css") ? "css" : activeFile.endsWith(".html") ? "html" : activeFile.endsWith(".php") ? "php" : activeFile.endsWith(".py") ? "python" : activeFile.endsWith(".json") ? "json" : "plaintext"}
+                value={currentFile?.content || ""}
+                onChange={val => setFiles(prev => prev.map(f => f.name === activeFile ? { ...f, content: val } : f))}
+                theme={t.editorTheme}
+                options={{ fontSize: 13, minimap: { enabled: false }, scrollBeyondLastLine: false, fontFamily: "JetBrains Mono, Consolas, monospace", wordWrap: "on", lineNumbers: "on" }}
+              />
+            ) : (
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: t.bg,
+                gap: 24,
+                userSelect: 'none',
+              }}>
+                <style>{`
+                  @keyframes float {
+                    0%, 100% { transform: translateY(0px); }
+                    50% { transform: translateY(-10px); }
+                  }
+                `}</style>
+                
+                <div style={{ fontSize: 80, animation: 'float 3s ease-in-out infinite' }}>
+                  🐙
+                </div>
+                
+                <div style={{ textAlign: 'center' }}>
+                  <h1 style={{ 
+                    fontSize: 28, fontWeight: 700, color: t.text, margin: 0,
+                    letterSpacing: '-0.5px'
+                  }}>
+                    Octopus AI
+                  </h1>
+                  <p style={{ fontSize: 13, color: t.textMuted, marginTop: 6 }}>
+                    محرر ذكاء اصطناعي متعدد الأرجل
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                  {[
+                    { key: 'Ctrl+O', label: 'فتح مجلد' },
+                    { key: 'Ctrl+P', label: 'بحث سريع' },
+                    { key: 'Ctrl+`', label: 'فتح Terminal' },
+                  ].map(item => (
+                    <div key={item.key} style={{
+                      display: 'flex', alignItems: 'center', gap: 16,
+                      padding: '6px 16px', borderRadius: 6,
+                      background: t.sidebar, border: `0.5px solid ${t.border}`,
+                    }}>
+                      <kbd style={{
+                        fontSize: 11, color: t.accent,
+                        background: t.bg, border: `0.5px solid ${t.border}`,
+                        borderRadius: 4, padding: '2px 8px', fontFamily: 'monospace',
+                      }}>
+                        {item.key}
+                      </kbd>
+                      <span style={{ fontSize: 12, color: t.textMuted }}>{item.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Terminal */}
@@ -946,11 +1270,27 @@ export default function App() {
                 </div>
                 <div style={{ marginRight: 23, background: m.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}` }}>
                   <p style={{ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                    {m.text.length > 250 ? m.text.slice(0, 250) + "..." : m.text}
+                   {m.text}
                   </p>
                 </div>
               </div>
             ))}
+            {awaitingConfirm && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingRight: 23 }}>
+                <button
+                  style={{ background: '#238636', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: "'IBM Plex Sans Arabic', sans-serif", fontWeight: 500 }}
+                  onClick={executeApprovedPlan}
+                >
+                  ✅ موافق — نفّذ
+                </button>
+                <button
+                  style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontFamily: "'IBM Plex Sans Arabic', sans-serif" }}
+                  onClick={cancelPlan}
+                >
+                  ❌ إلغاء
+                </button>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
 
@@ -962,7 +1302,7 @@ export default function App() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={onKey}
-                placeholder="اكتب أمرك..."
+                placeholder="اكتب أمرك... (أخطبوط سيشرح قبل التنفيذ)"
                 rows={2}
                 dir="auto"
               />
