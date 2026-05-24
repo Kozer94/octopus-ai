@@ -35,11 +35,13 @@ export function RightPanel({
   legs,
   loading,
   messages,
+  onResizeStart,
   onKey,
   projectName,
   reset,
   rightPanelOpen,
   rightPanelTab,
+  rightPanelWidth,
   send,
   setActiveFile,
   setInput,
@@ -85,7 +87,14 @@ export function RightPanel({
         </button>
       </div>
 
-      {rightPanelOpen && <div style={{ width: 260, background: t.sidebar, borderRight: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0, order: 1 }}>
+      {rightPanelOpen && <div style={{ width: rightPanelWidth, background: t.sidebar, borderRight: `0.5px solid ${t.border}`, display: "flex", flexDirection: "column", flexShrink: 0, order: 1, position: 'relative' }}>
+        <div
+          style={{ position: 'absolute', left: -3, top: 0, bottom: 0, width: 6, cursor: 'col-resize', background: 'transparent', zIndex: 4 }}
+          onMouseDown={onResizeStart}
+          onMouseEnter={e => e.currentTarget.style.background = t.accent}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          title="Resize panel"
+        />
         <div style={{ padding: "8px 12px", borderBottom: `0.5px solid ${t.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
           <i className={`codicon ${getPanelIcon(rightPanelTab)}`} style={{ color: t.accent, fontSize: 13 }} />
           <span style={{ fontSize: 11, color: t.textMuted, textTransform: 'uppercase', letterSpacing: '0.8px' }}>

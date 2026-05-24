@@ -48,6 +48,7 @@ export default function App() {
   const [currentDir, setCurrentDir] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [terminalHeight, setTerminalHeight] = useState(180);
+  const [rightPanelWidth, setRightPanelWidth] = useState(260);
   const [activeActivity, setActiveActivity] = useState('explorer');
   const [projectName, setProjectName] = useState('Octopus');
   const [isRunning, setIsRunning] = useState(false);
@@ -101,6 +102,15 @@ export default function App() {
       maxHeight: 400,
       minHeight: 80,
       setHeight: setTerminalHeight,
+    });
+  }
+
+  function startRightPanelResize(e) {
+    startHorizontalResize(e, {
+      currentWidth: rightPanelWidth,
+      maxWidth: 520,
+      minWidth: 220,
+      setWidth: setRightPanelWidth,
     });
   }
 
@@ -588,9 +598,11 @@ export default function App() {
           reset={reset}
           rightPanelOpen={rightPanelOpen}
           rightPanelTab={rightPanelTab}
+          rightPanelWidth={rightPanelWidth}
           send={send}
           setActiveFile={setActiveFile}
           setInput={setInput}
+          onResizeStart={startRightPanelResize}
           setRightPanelOpen={setRightPanelOpen}
           setRightPanelTab={setRightPanelTab}
           setTerminalOpen={setTerminalOpen}
