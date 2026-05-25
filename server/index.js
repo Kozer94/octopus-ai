@@ -30,6 +30,7 @@ const {
 const { createCorsOptions } = require('./services/httpSecurity');
 const { loadJsonFile, replaceObjectContents, saveJsonFile } = require('./services/jsonStoreService');
 const { createPackageIconResolver } = require('./services/packageIconService');
+const { registerPtyTerminalServer } = require('./services/ptyTerminalService');
 const { createSimplePluginRuntime } = require('./services/simplePluginRuntimeService');
 const { appendTodoUpdate } = require('./services/todoLogService');
 const { registerFileRoutes } = require('./routes/files');
@@ -201,6 +202,8 @@ const server = app.listen(PORT, () => {
   });
 
 });
+
+registerPtyTerminalServer(server);
 
 server.on('error', (err) => {
   console.error('❌ Server listen error:', err);

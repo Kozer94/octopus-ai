@@ -1,152 +1,162 @@
-import { useRef, useState } from 'react';
-import { splitTerminalLinks } from '../utils/terminalLinks';
+import { useEffect, useRef, useState } from 'react';
+import { Terminal } from '@xterm/xterm';
+import { FitAddon } from '@xterm/addon-fit';
+import '@xterm/xterm/css/xterm.css';
+import { BACKEND } from '../config/uiConfig';
+
+function getTerminalSocketUrl() {
+  return `${BACKEND.replace(/^http/, 'ws')}/api/terminal/pty`;
+}
+
+function getThemeColors(t) {
+  return {
+    background: t.bg,
+    foreground: t.text,
+    cursor: t.accent,
+    selectionBackground: `${t.accent}55`,
+    black: '#000000',
+    red: '#ff7b72',
+    green: '#7ee787',
+    yellow: '#d29922',
+    blue: '#58a6ff',
+    magenta: '#bc8cff',
+    cyan: '#39c5cf',
+    white: '#d0d7de',
+    brightBlack: '#6e7681',
+    brightRed: '#ffa198',
+    brightGreen: '#56d364',
+    brightYellow: '#e3b341',
+    brightBlue: '#79c0ff',
+    brightMagenta: '#d2a8ff',
+    brightCyan: '#56d4dd',
+    brightWhite: '#ffffff',
+  };
+}
 
 export function TerminalPanel({
+  currentDir,
   isRunning,
   onClear,
   onClose,
-  onCommandChange,
   onInterrupt,
-  onRunCommand,
   onResizeStart,
   onTabChange,
   t,
-  terminalBottomRef,
   terminalHeight,
-  terminalHistory,
-  terminalInput,
   terminalTab,
 }) {
-  const [commandHistory, setCommandHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(null);
-  const [contextMenu, setContextMenu] = useState(null);
-  const inputRef = useRef(null);
+  const containerRef = useRef(null);
+  const terminalRef = useRef(null);
+  const fitAddonRef = useRef(null);
+  const socketRef = useRef(null);
+  const [connected, setConnected] = useState(false);
 
-  const renderTerminalText = (text) => splitTerminalLinks(text).map((part, index) => {
-    if (part.type !== 'link') return part.value;
+  useEffect(() => {
+    if (!containerRef.current || terminalRef.current) return;
 
-    return (
-      <a
-        key={`${part.value}-${index}`}
-        href={part.value}
-        target="_blank"
-        rel="noreferrer"
-        style={{ color: t.accent, textDecoration: 'underline', textUnderlineOffset: 2 }}
-      >
-        {part.value}
-      </a>
-    );
-  });
-
-  const getSelectedText = () => {
-    const input = inputRef.current;
-    if (document.activeElement === input && input.selectionStart !== input.selectionEnd) {
-      return terminalInput.slice(input.selectionStart, input.selectionEnd);
-    }
-
-    return window.getSelection?.().toString() || '';
-  };
-
-  const copyText = async (text) => {
-    if (!text) return;
-    await navigator.clipboard?.writeText(text);
-  };
-
-  const copyAll = () => copyText(terminalHistory.map(item => item.text).join('\n'));
-
-  const pasteClipboard = async () => {
-    const text = await navigator.clipboard?.readText?.();
-    if (!text) return;
-    const input = inputRef.current;
-    const start = input?.selectionStart ?? terminalInput.length;
-    const end = input?.selectionEnd ?? terminalInput.length;
-    const nextInput = `${terminalInput.slice(0, start)}${text}${terminalInput.slice(end)}`;
-    onCommandChange(nextInput);
-    requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(start + text.length, start + text.length);
+    const terminal = new Terminal({
+      allowProposedApi: true,
+      convertEol: true,
+      cursorBlink: true,
+      cursorStyle: 'bar',
+      fontFamily: 'JetBrains Mono, Consolas, monospace',
+      fontSize: 12,
+      scrollback: 5000,
+      theme: getThemeColors(t),
     });
+    const fitAddon = new FitAddon();
+
+    terminal.loadAddon(fitAddon);
+    terminal.open(containerRef.current);
+    terminalRef.current = terminal;
+    fitAddonRef.current = fitAddon;
+
+    requestAnimationFrame(() => fitAddon.fit());
+
+    return () => {
+      socketRef.current?.close();
+      terminal.dispose();
+      terminalRef.current = null;
+      fitAddonRef.current = null;
+      socketRef.current = null;
+    };
+  }, [t]);
+
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.options.theme = getThemeColors(t);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    const fitAddon = fitAddonRef.current;
+    if (!terminal || !fitAddon) return;
+
+    fitAddon.fit();
+    const socket = new WebSocket(getTerminalSocketUrl());
+    socketRef.current = socket;
+
+    socket.addEventListener('open', () => {
+      setConnected(true);
+      const dimensions = fitAddon.proposeDimensions();
+      socket.send(JSON.stringify({
+        type: 'start',
+        cwd: currentDir,
+        cols: dimensions?.cols || terminal.cols,
+        rows: dimensions?.rows || terminal.rows,
+      }));
+    });
+
+    socket.addEventListener('message', (event) => {
+      const message = JSON.parse(event.data);
+      if (message.type === 'data') terminal.write(message.data);
+      if (message.type === 'ready') terminal.writeln(`\x1b[32mOctopus PTY ready: ${message.cwd}\x1b[0m`);
+      if (message.type === 'exit') {
+        terminal.writeln(`\x1b[33mProcess exited with code ${message.exitCode ?? 0}\x1b[0m`);
+        setConnected(false);
+      }
+    });
+
+    socket.addEventListener('close', () => setConnected(false));
+    socket.addEventListener('error', () => {
+      setConnected(false);
+      terminal.writeln('\x1b[31mPTY connection failed\x1b[0m');
+    });
+
+    const inputDisposable = terminal.onData(data => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      fitAddon.fit();
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      }
+    });
+    resizeObserver.observe(containerRef.current);
+
+    return () => {
+      inputDisposable.dispose();
+      resizeObserver.disconnect();
+      socket.close();
+    };
+  }, [currentDir]);
+
+  const clearTerminal = () => {
+    terminalRef.current?.clear();
+    onClear?.();
   };
 
-  const runCurrentCommand = () => {
-    const command = terminalInput.trim();
-    if (!command) return;
-    setCommandHistory(prev => [command, ...prev.filter(item => item !== command)].slice(0, 50));
-    setHistoryIndex(null);
-    onRunCommand(terminalInput);
-  };
-
-  const recallCommand = (direction) => {
-    if (!commandHistory.length) return;
-    if (direction === 'down' && historyIndex === 0) {
-      setHistoryIndex(null);
-      onCommandChange('');
-      return;
-    }
-
-    const nextIndex = historyIndex === null
-      ? (direction === 'up' ? 0 : null)
-      : Math.max(0, Math.min(commandHistory.length - 1, historyIndex + (direction === 'up' ? 1 : -1)));
-
-    if (nextIndex === null) return;
-    setHistoryIndex(nextIndex);
-    onCommandChange(commandHistory[nextIndex]);
-  };
-
-  const handleKeyDown = (event) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      runCurrentCommand();
-      return;
-    }
-
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      recallCommand('up');
-      return;
-    }
-
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      recallCommand('down');
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'l') {
-      event.preventDefault();
-      onClear();
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-      event.preventDefault();
-      event.currentTarget.select();
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && isRunning && !getSelectedText()) {
-      event.preventDefault();
-      onInterrupt?.();
-    }
-  };
-
-  const showContextMenu = (event) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, selectedText: getSelectedText() });
-  };
-
-  const runContextAction = async (command) => {
-    setContextMenu(null);
-    if (command === 'copySelection') await copyText(contextMenu?.selectedText || getSelectedText());
-    if (command === 'copyAll') await copyAll();
-    if (command === 'paste') await pasteClipboard();
-    if (command === 'interrupt') await onInterrupt?.();
-    if (command === 'clear') onClear();
-    if (command === 'focus') inputRef.current?.focus();
+  const interruptTerminal = () => {
+    socketRef.current?.send(JSON.stringify({ type: 'input', data: '\x03' }));
+    onInterrupt?.();
   };
 
   return (
-    <div style={{ height: terminalHeight, borderTop: `0.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'relative' }} onClick={() => setContextMenu(null)}>
+    <div style={{ height: terminalHeight, borderTop: `0.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ height: 3, cursor: 'row-resize', background: 'transparent' }}
         onMouseDown={onResizeStart}
         onMouseEnter={e => e.currentTarget.style.background = t.accent}
@@ -160,78 +170,22 @@ export function TerminalPanel({
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: isRunning ? '#7ee787' : t.textMuted, padding: '0 8px' }}>
-          {isRunning ? 'Running' : 'Idle'}
+        <span style={{ fontSize: 11, color: connected || isRunning ? '#7ee787' : t.textMuted, padding: '0 8px' }}>
+          {connected || isRunning ? 'PTY' : 'Offline'}
         </span>
-        {isRunning && (
-          <button title="Interrupt (Ctrl+C)" style={{ background: 'transparent', border: 'none', color: '#ff7b72', cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={onInterrupt}>
-            <i className="codicon codicon-debug-stop" style={{ fontSize: 14 }} />
-          </button>
-        )}
-        <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={onClear}>
+        <button title="Interrupt (Ctrl+C)" style={{ background: 'transparent', border: 'none', color: '#ff7b72', cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={interruptTerminal}>
+          <i className="codicon codicon-debug-stop" style={{ fontSize: 14 }} />
+        </button>
+        <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={clearTerminal}>
           <i className="codicon codicon-trash" style={{ fontSize: 14 }} />
         </button>
         <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={onClose}>
           <i className="codicon codicon-close" style={{ fontSize: 14 }} />
         </button>
       </div>
-      <div
-        onClick={() => inputRef.current?.focus()}
-        onContextMenu={showContextMenu}
-        style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: t.bg, fontFamily: 'JetBrains Mono, Consolas, monospace', userSelect: 'text', cursor: 'text' }}
-      >
-        {terminalTab === 'terminal' && terminalHistory.map((historyItem, i) => (
-          <div key={i} style={{ fontSize: 12, color: historyItem.type === 'input' ? t.accent : historyItem.type === 'error' ? '#ff7b72' : historyItem.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{renderTerminalText(historyItem.text)}</div>
-        ))}
-        {terminalTab === 'terminal' && (
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 22, fontSize: 12, lineHeight: 1.6, color: t.text }}>
-            <span style={{ color: t.accent, flexShrink: 0 }}>$</span>
-            <textarea
-              ref={inputRef}
-              aria-label="Terminal command"
-              rows={Math.min(6, Math.max(1, terminalInput.split('\n').length))}
-              style={{ flex: 1, minWidth: 0, resize: 'none', overflow: 'hidden', background: 'transparent', border: 'none', outline: 'none', color: t.text, caretColor: t.accent, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, lineHeight: 1.6, padding: 0 }}
-              value={terminalInput}
-              onChange={e => onCommandChange(e.target.value)}
-              onClick={event => event.stopPropagation()}
-              onKeyDown={handleKeyDown}
-              dir="ltr"
-              spellCheck={false}
-            />
-          </div>
-        )}
-        {terminalTab === 'problems' && <p style={{ fontSize: 12, color: t.textMuted }}>No problems</p>}
-        {terminalTab === 'output' && <p style={{ fontSize: 12, color: t.textMuted }}>No output</p>}
-        <div ref={terminalBottomRef} />
-      </div>
-      {contextMenu && (
-        <div
-          style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 1000, minWidth: 180, padding: 4, background: t.panel, border: `0.5px solid ${t.border}`, boxShadow: '0 8px 24px rgba(0,0,0,0.28)' }}
-          onClick={event => event.stopPropagation()}
-        >
-          {[
-            { label: 'Copy Selection', icon: 'codicon-copy', command: 'copySelection', disabled: !contextMenu.selectedText },
-            { label: 'Copy All', icon: 'codicon-copy', command: 'copyAll', disabled: terminalHistory.length === 0 },
-            { label: 'Paste', icon: 'codicon-clippy', command: 'paste' },
-            { separator: true },
-            { label: 'Interrupt', icon: 'codicon-debug-stop', command: 'interrupt', disabled: !isRunning },
-            { label: 'Clear', icon: 'codicon-trash', command: 'clear' },
-            { label: 'Focus Prompt', icon: 'codicon-terminal', command: 'focus' },
-          ].map((item, index) => item.separator ? (
-            <div key={index} style={{ height: 1, background: t.border, margin: '4px 6px' }} />
-          ) : (
-            <button
-              key={item.label}
-              disabled={item.disabled}
-              onClick={() => runContextAction(item.command)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 9px', background: 'transparent', border: 'none', color: item.disabled ? t.textMuted : t.text, cursor: item.disabled ? 'default' : 'pointer', opacity: item.disabled ? 0.45 : 1, textAlign: 'left', fontSize: 12 }}
-            >
-              <i className={`codicon ${item.icon}`} style={{ color: item.disabled ? t.textMuted : t.accent, fontSize: 13, width: 14 }} />
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <div ref={containerRef} style={{ display: terminalTab === 'terminal' ? 'block' : 'none', flex: 1, minHeight: 0, background: t.bg, padding: '6px 8px' }} />
+      {terminalTab === 'problems' && <p style={{ flex: 1, margin: 0, padding: 12, fontSize: 12, color: t.textMuted, background: t.bg }}>No problems</p>}
+      {terminalTab === 'output' && <p style={{ flex: 1, margin: 0, padding: 12, fontSize: 12, color: t.textMuted, background: t.bg }}>No output</p>}
     </div>
   );
 }

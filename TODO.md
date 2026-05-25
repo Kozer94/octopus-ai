@@ -77,6 +77,7 @@
 - [2026-05-25 00:00:00 UTC] system:ui `client/src/components/TerminalPanel.jsx` - إزالة شريط Enter command المنفصل ونقل إدخال الأوامر إلى prompt داخل مساحة التيرمنال نفسها
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - إكمال مرحلة التيرمنال بإخراج حي streaming وإيقاف الأمر الجاري وprompt متعدد الأسطر وحالة Running/Idle
 - [2026-05-25 00:00:00 UTC] system:docs `TERMINAL.md` - إضافة دليل أوامر التيرمنال والاختصارات والحدود والباقي لتطوير PTY/WebSocket
+- [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل التيرمنال إلى xterm.js مع node-pty وWebSocket وaddon-fit لتجربة PTY حقيقية
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان

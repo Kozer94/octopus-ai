@@ -713,6 +713,7 @@ export default function App() {
 
           {terminalOpen && (
             <TerminalPanel
+              currentDir={currentDir}
               isRunning={isRunning || terminalBusy}
               onClear={() => setTerminalHistory([TERMINAL_READY_ENTRY])}
               onClose={() => setTerminalOpen(false)}

@@ -96,28 +96,35 @@ git clean -fd
 
 ## حدود التيرمنال الحالية
 
-هذا التيرمنال صار متقدم، لكنه ليس PTY كامل مثل VS Code Terminal. لذلك توجد حدود:
+التيرمنال انتقل إلى `xterm.js + node-pty + WebSocket`، لذلك صار أقرب إلى تيرمنال حقيقي:
 
-- لا يدعم برامج تفاعلية بالكامل مثل `vim`, `nano`, `mysql` interactive shell، أو prompts التي تحتاج إدخال مستمر.
-- لا يدعم ألوان ANSI بشكل كامل حتى الآن.
-- لا يدعم resize terminal الحقيقي الذي يرسل حجم الأعمدة والسطور للـ process.
+- `xterm.js` يعرض ANSI colors ويتعامل مع الإدخال والمخرجات كواجهة terminal.
+- `@xterm/addon-fit` يضبط حجم الأعمدة والسطور عند resize.
+- `node-pty` يشغل shell حقيقي مثل PowerShell على Windows أو bash على Linux/macOS.
+- WebSocket يربط الواجهة بالـ PTY كـ stream مستمر.
+
+## حدود التيرمنال الحالية
+
+رغم الانتقال إلى PTY، ما زالت توجد نقاط تحتاج تحسين:
+
+- يحتاج اختبار أوسع مع برامج تفاعلية مثل `vim`, `nano`, `mysql` interactive shell.
 - لا يدعم جلسات متعددة للتيرمنال.
 - لا يدعم حفظ history بعد إغلاق التطبيق.
 - لا يدعم autocomplete للأوامر أو الملفات.
+- أوامر Run Project من المينيوبار ما زالت تستخدم runner منفصل، وليست مدمجة بالكامل داخل جلسة PTY.
 
 ## الباقي للتطوير
 
 أفضل مراحل لاحقة:
 
-1. إضافة `xterm.js` في الواجهة لعرض terminal احترافي.
-2. إضافة `node-pty` في السيرفر لتشغيل shell تفاعلي حقيقي.
-3. ربط التيرمنال عبر WebSocket بدل HTTP streaming.
-4. دعم ANSI colors.
-5. دعم جلسات متعددة tabs.
-6. حفظ command history لكل مشروع.
-7. إضافة autocomplete للأوامر والمسارات.
-8. إضافة terminal profiles مثل PowerShell وCMD وGit Bash.
+1. دعم جلسات متعددة tabs.
+2. حفظ command history لكل مشروع.
+3. إضافة autocomplete للأوامر والمسارات.
+4. إضافة terminal profiles مثل PowerShell وCMD وGit Bash.
+5. دمج Run Project داخل جلسة PTY بدل runner منفصل.
+6. إضافة reconnect/resume للجلسة إذا أغلقت الواجهة.
+7. إضافة بحث داخل مخرجات التيرمنال.
 
 ## الخلاصة
 
-التيرمنال الحالي مناسب لتشغيل أوامر التطوير اليومية ومشاهدة output حي وإيقاف العمليات. إذا نريد تجربة مثل VS Code تماما، المرحلة القادمة لازم تكون PTY/WebSocket.
+التيرمنال الحالي صار مبني على PTY/WebSocket، وهذا هو الأساس الصحيح لتجربة قريبة من VS Code Terminal. الباقي الآن تحسينات تجربة مثل تعدد الجلسات، history دائم، profiles، ودمج أوامر التشغيل مع نفس الجلسة.

@@ -108,6 +108,7 @@ function terminateProcess(proc) {
 
 module.exports = {
   buildSafeEnv,
+  resolveWorkingDirectory,
   runCommand,
   spawnCommand,
   terminateProcess,
