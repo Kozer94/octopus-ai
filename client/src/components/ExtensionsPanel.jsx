@@ -41,9 +41,9 @@ export function ExtensionsPanel({
         {!extSearching && extSearchResults.length === 0 && extSearchQuery !== '' && (
           <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No results found</p>
         )}
-        {extSearchResults.map((extension, i) => (
+        {extSearchResults.map((extension) => (
           <div
-            key={i}
+            key={extension.id || extension.name || extension.displayName}
             style={{
               padding: '8px 12px',
               cursor: 'pointer',
@@ -62,8 +62,8 @@ export function ExtensionsPanel({
               style={{ width: 32, height: 32, borderRadius: 4, objectFit: 'contain' }}
               onError={e => e.target.style.display = 'none'}
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: t.text, fontWeight: 500, marginBottom: 2 }}>
+            <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+              <div style={{ fontSize: 12, color: t.text, fontWeight: 500, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {extension.displayName || extension.name}
               </div>
               <div style={{ fontSize: 10, color: t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

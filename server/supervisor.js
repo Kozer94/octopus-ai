@@ -1,6 +1,8 @@
 // server/supervisor.js
 const { spawn } = require('child_process');
+const http = require('http');
 const path = require('path');
+const { createEnvReader } = require('./services/envService');
 
 const MAX_RESTARTS_PER_MINUTE = 5;
 const DELAYS = [2000, 5000, 10000]; // 2s, 5s, 10s
@@ -10,6 +12,39 @@ let restartTimer = null;
 let stopping = false;
 let restartCount = 0;
 let deathTimestamps = [];
+
+function getServerPort(env = createEnvReader()) {
+  return Number(env.get('PORT', '3001'));
+}
+
+function checkExistingServer(port = getServerPort()) {
+  return new Promise(resolve => {
+    const req = http.get({
+      host: '127.0.0.1',
+      port,
+      path: '/api/health',
+      timeout: 750,
+    }, res => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          resolve(data?.success === true && data?.service === 'octopus-ai');
+        } catch {
+          resolve(false);
+        }
+      });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve(false);
+    });
+    req.on('error', () => resolve(false));
+  });
+}
 
 function getDelay() {
   if (restartCount === 0) return 0;
@@ -51,15 +86,23 @@ function startServer({ onStatus } = {}) {
     console.log(`\n⏳ الانتظار ${delay / 1000} ثوانٍ قبل إعادة التشغيل (المحاولة رقم ${restartCount + 1})...`);
   }
 
-  restartTimer = setTimeout(() => {
+  restartTimer = setTimeout(async () => {
     restartTimer = null;
     if (stopping) return;
+
+    const port = getServerPort();
+    if (await checkExistingServer(port)) {
+      console.log(`\n✅ خادم أخطبوط يعمل مسبقاً على http://localhost:${port} — لن يتم تشغيل نسخة ثانية.`);
+      onStatus?.({ type: 'existing', port });
+      return;
+    }
 
     console.log('\n🚀 جاري تشغيل الخادم...');
     
     child = spawn('node', [path.join(__dirname, 'index.js')], {
       stdio: 'inherit',
-      shell: true
+      shell: false,
+      windowsHide: true,
     });
 
     child.on('spawn', () => {

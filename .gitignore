@@ -15,6 +15,9 @@ server/.env
 *.log
 npm-debug.log*
 
+# Runtime snapshots
+server/state/runtime/
+
 # OS
 .DS_Store
 Thumbs.db

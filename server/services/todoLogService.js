@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { createEnvReader } = require('./envService');
 
 const START_MARKER = '<!-- OCTOPUS_AUTO_TODO_START -->';
 const END_MARKER = '<!-- OCTOPUS_AUTO_TODO_END -->';
@@ -11,8 +12,8 @@ function toRepoRelative(projectRoot, filePath) {
   return rel || path.basename(fullPath);
 }
 
-function shouldSkipTodoLog(projectRoot, filePath) {
-  if (process.env.OCTOPUS_AUTO_TODO === '0') return true;
+function shouldSkipTodoLog(projectRoot, filePath, env = createEnvReader()) {
+  if (env.get('OCTOPUS_AUTO_TODO') === '0') return true;
   if (!projectRoot || !filePath) return true;
 
   const rel = toRepoRelative(projectRoot, filePath).toLowerCase();

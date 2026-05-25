@@ -1,5 +1,5 @@
 function isReportCommand(command = '') {
-  return /فحص|تقرير|تقريري|حلل|تحليل|وثق|توثيق|ملخص|ملخّص|report|analyze|analysis|documentation|markdown|\bmd\b/i
+  return /^(فحص|افحص|تقرير|حلل|ملخص|report|analyze)\b|اكتب تقرير|generate report/i
     .test(String(command || ''));
 }
 

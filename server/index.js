@@ -1,7 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
-const rateLimit = require('express-rate-limit');
 const Groq = require('groq-sdk');
 const path = require('path');
 const {
@@ -23,6 +22,13 @@ const { buildRealState, validateRealState } = require('./services/stateService')
 const { SYSTEM_PROMPT, isReportCommand } = require('./services/octopusConfig');
 const { createTaggedFileSaver } = require('./services/taggedFileService');
 const { createAIService } = require('./services/aiService');
+const { createEventBus } = require('./services/eventBusService');
+const { createEnvReader } = require('./services/envService');
+const { createJobQueue } = require('./services/jobQueueService');
+const { createApiRateLimiters } = require('./services/rateLimitService');
+const { createTaskRuntime } = require('./services/taskRuntimeService');
+const { createWorkerAdapter } = require('./services/workerAdapterService');
+const { createWorkerRegistry } = require('./services/workerRegistryService');
 const {
   isSensitiveFile,
   writeProjectFile,
@@ -33,6 +39,8 @@ const { createPackageIconResolver } = require('./services/packageIconService');
 const { registerPtyTerminalServer } = require('./services/ptyTerminalService');
 const { createSimplePluginRuntime } = require('./services/simplePluginRuntimeService');
 const { appendTodoUpdate } = require('./services/todoLogService');
+const { createAuthMiddleware } = require('./services/authService');
+const { createRequestGuard } = require('./services/inputValidation');
 const { registerFileRoutes } = require('./routes/files');
 const { registerTerminalRoutes } = require('./routes/terminal');
 const { registerGitRoutes } = require('./routes/git');
@@ -44,6 +52,9 @@ const { registerPackageRoutes } = require('./routes/packages');
 const { registerPluginManagerRoutes } = require('./routes/plugins');
 const { registerSimplePluginRoutes } = require('./routes/simplePlugins');
 const { registerOctopusRoutes } = require('./routes/octopus');
+const { registerEventRoutes } = require('./routes/events');
+const { registerRuntimeRoutes } = require('./routes/runtime');
+const { registerScanRoutes } = require('./routes/scan');
 
 // Simple Plugin System - Module Exports Style
 const pluginsDir = path.join(__dirname, 'plugins');
@@ -75,8 +86,9 @@ function saveNpmPackages() {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const env = createEnvReader();
+const PORT = env.get('PORT', '3001');
+const groq = new Groq({ apiKey: env.get('GROQ_API_KEY') });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
@@ -88,32 +100,40 @@ process.on('uncaughtException', (err) => {
   process.exitCode = 1;
 });
 
-// Rate limiting middleware
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 100, // حد أقصى 100 طلب لكل 15 دقيقة
-  message: 'طلبات كثيرة جداً، الرجاء المحاولة لاحقاً',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-// Rate limiting أقوى للـ endpoints الثقيلة (AI)
-const aiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 30, // حد أقصى 30 طلب AI لكل 15 دقيقة
-  message: 'طلبات AI كثيرة جداً، الرجاء المحاولة لاحقاً',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const { aiLimiter, config: rateLimitConfig, limiter, mutationLimiter, terminalLimiter } = createApiRateLimiters(env);
 
 app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(limiter);
+app.use('/api', createAuthMiddleware());
+app.use('/api', createRequestGuard());
+app.use('/api', mutationLimiter);
 
-// تخزين تاريخ المحادثات لكل جلسة
-const sessions = {};
+// تخزين تاريخ المحادثات لكل جلسة (TTL=30min, max=500)
+const { createSessionStore } = require('./services/sessionStore');
+const sessions = createSessionStore();
+const eventBus = createEventBus({
+  eventLogPath: path.join(__dirname, 'state', 'runtime', 'events', 'events.ndjson'),
+});
+const jobQueue = createJobQueue({
+  concurrency: Number(env.get('OCTOPUS_JOB_CONCURRENCY', '2')) || 2,
+  eventBus,
+  maxPending: Number(env.get('OCTOPUS_JOB_MAX_PENDING', '100')) || 100,
+});
+const workerRegistry = createWorkerRegistry();
+const taskRuntime = createTaskRuntime({
+  eventBus,
+  stateDir: path.join(__dirname, 'state', 'runtime'),
+  workerRegistry,
+  workerAdapter: createWorkerAdapter({
+    mode: 'child_process',
+    workerRegistry,
+    workerDir: path.join(__dirname, 'runtime', 'workers'),
+    hostPath: path.join(__dirname, 'runtime', 'workerHost.js'),
+  }),
+});
 
-const callAI = createAIService({ groq, pluginManager, selectModel });
+const callAI = createAIService({ env, groq, pluginManager, selectModel });
 const simplePluginRuntime = createSimplePluginRuntime({
   app,
   pluginsDir,
@@ -137,6 +157,7 @@ registerOctopusRoutes(app, {
   executeHook,
   getProjectContextForTask,
   isReportCommand,
+  jobQueue,
   previewBrainController,
   runBrainController,
   saveTaggedFiles,
@@ -145,6 +166,7 @@ registerOctopusRoutes(app, {
   validateProjectBinding,
 });
 registerCoreRoutes(app, {
+  eventBus,
   ensureProjectMap,
   getEnabledPlugins,
   getProjectContextForTask,
@@ -153,10 +175,11 @@ registerCoreRoutes(app, {
   buildRealState,
   validateRealState,
   validateProjectBinding,
+  rateLimitConfig,
 });
-registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate });
+registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus });
 registerSystemRoutes(app);
-registerTerminalRoutes(app);
+registerTerminalRoutes(app, { eventBus, terminalLimiter });
 registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatcher });
 
 registerGitRoutes(app);
@@ -170,9 +193,13 @@ registerPackageRoutes(app, {
   rootDir: path.join(__dirname, '..'),
 });
 registerMarketplaceRoutes(app, { marketplace, pluginManager });
+registerEventRoutes(app, { eventBus });
+registerRuntimeRoutes(app, { eventBus, taskRuntime });
+registerScanRoutes(app);
 
 const server = app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);
+  eventBus.publish('server.started', { port: Number(PORT) }, { category: 'system', source: 'server' });
   
   // تحميل الإضافات البسيطة (module.exports style)
   console.log(`📂 Loading simple plugins from: ${pluginsDir}`);

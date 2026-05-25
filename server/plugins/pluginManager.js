@@ -6,6 +6,18 @@
 const fs = require('fs');
 const path = require('path');
 
+function normalizeHookCallbacks(callbacks) {
+  if (!callbacks) return [];
+  return Array.isArray(callbacks) ? callbacks.filter(fn => typeof fn === 'function') : [callbacks].filter(fn => typeof fn === 'function');
+}
+
+function normalizePlugin(plugin) {
+  if (!plugin) return null;
+  plugin.hooks = plugin.hooks || {};
+  plugin.enabled = plugin.enabled !== false;
+  return plugin;
+}
+
 class PluginManager {
   constructor() {
     this.plugins = new Map();
@@ -23,21 +35,24 @@ class PluginManager {
         await this.unloadPlugin(plugin.id);
       }
 
-      await plugin.initialize();
-      this.plugins.set(plugin.id, plugin);
+      const normalizedPlugin = normalizePlugin(plugin);
+      await normalizedPlugin.initialize?.();
+      this.plugins.set(normalizedPlugin.id, normalizedPlugin);
       
       // تسجيل hooks من الإضافة
-      for (const hookName of Object.keys(plugin.hooks)) {
+      for (const hookName of Object.keys(normalizedPlugin.hooks)) {
+        const callbacks = normalizeHookCallbacks(normalizedPlugin.hooks[hookName]);
+        if (callbacks.length === 0) continue;
         if (!this.hooks.has(hookName)) {
           this.hooks.set(hookName, []);
         }
         this.hooks.get(hookName).push({
-          pluginId: plugin.id,
-          callbacks: plugin.hooks[hookName],
+          pluginId: normalizedPlugin.id,
+          callbacks,
         });
       }
 
-      console.log(`✅ Plugin loaded: ${plugin.name} v${plugin.version}`);
+      console.log(`✅ Plugin loaded: ${normalizedPlugin.name} v${normalizedPlugin.version}`);
       return true;
     } catch (error) {
       console.error(`❌ Failed to load plugin ${plugin.id}:`, error);
@@ -56,7 +71,7 @@ class PluginManager {
         return false;
       }
 
-      await plugin.shutdown();
+      await plugin.shutdown?.();
       
       // إزالة hooks من الإضافة
       for (const hookName of Object.keys(plugin.hooks)) {
@@ -151,8 +166,11 @@ class PluginManager {
   async enablePlugin(pluginId) {
     const plugin = this.plugins.get(pluginId);
     if (!plugin) return false;
-    
-    return await plugin.enable();
+
+    if (typeof plugin.enable === 'function') return await plugin.enable();
+    plugin.enabled = true;
+    await plugin.initialize?.();
+    return true;
   }
 
   /**
@@ -161,8 +179,11 @@ class PluginManager {
   async disablePlugin(pluginId) {
     const plugin = this.plugins.get(pluginId);
     if (!plugin) return false;
-    
-    return await plugin.disable();
+
+    if (typeof plugin.disable === 'function') return await plugin.disable();
+    plugin.enabled = false;
+    await plugin.shutdown?.();
+    return true;
   }
 
   /**

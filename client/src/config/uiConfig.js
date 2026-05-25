@@ -1,5 +1,17 @@
-export const BACKEND = "http://localhost:3001";
-export const SESSION_ID = "session_" + Date.now();
+const DEFAULT_BACKEND = 'http://localhost:3001';
+const SESSION_STORAGE_KEY = 'octopus.sessionId';
+
+export const BACKEND = (import.meta.env?.VITE_BACKEND_URL || DEFAULT_BACKEND).replace(/\/$/, '');
+
+export function createSessionId({ storage = globalThis.sessionStorage, now = Date.now } = {}) {
+  const existing = storage?.getItem?.(SESSION_STORAGE_KEY);
+  if (existing) return existing;
+
+  const randomPart = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+  const sessionId = `session_${now()}_${randomPart}`;
+  storage?.setItem?.(SESSION_STORAGE_KEY, sessionId);
+  return sessionId;
+}
 
 export const THEMES = {
   dark:      { name: 'Dark',      bg: '#0d1117', sidebar: '#161b22', border: '#30363d', text: '#e6edf3', textMuted: '#8b949e', accent: '#58a6ff', activityBar: '#161b22', statusBar: '#1f6feb', editorTheme: 'vs-dark' },

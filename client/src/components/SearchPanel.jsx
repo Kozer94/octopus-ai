@@ -1,3 +1,4 @@
+import { bidiIsolateStyle, codeTextStyle } from '../utils/bidiText';
 import { getFileIcon } from '../utils/fileIcons';
 
 export function SearchPanel({
@@ -39,18 +40,18 @@ export function SearchPanel({
                 const { icon, color } = getFileIcon(file);
                 return <i className={`codicon ${icon}`} style={{ color, fontSize: 12 }} />;
               })()}
-              <span style={{ fontSize: 11, color: t.accent, fontWeight: 500 }}>{file}</span>
+              <span dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: t.accent, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{file}</span>
               <span style={{ fontSize: 10, color: t.textMuted, marginRight: 'auto' }}>{data.lines.length} result{data.lines.length !== 1 ? 's' : ''}</span>
             </div>
-            {data.lines.map((result, i) => (
-              <div key={i}
+            {data.lines.map((result) => (
+              <div key={`${result.path}:${result.line}:${result.text}`}
                 style={{ padding: '4px 10px 4px 20px', cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'flex-start' }}
                 onClick={() => onFileClick({ name: result.file, path: result.path, type: 'file' })}
                 onMouseEnter={e => e.currentTarget.style.background = t.accent + '11'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
                 <span style={{ fontSize: 10, color: t.textMuted, fontFamily: 'monospace', minWidth: 28, textAlign: 'left', flexShrink: 0 }}>{result.line}</span>
-                <span style={{ fontSize: 11, color: t.textMuted, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.text}</span>
+                <span dir="auto" style={codeTextStyle({ fontSize: 11, color: t.textMuted, fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{result.text}</span>
               </div>
             ))}
           </div>

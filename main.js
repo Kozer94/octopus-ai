@@ -23,6 +23,23 @@ function createWindow() {
     show: false,
   });
 
+  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-eval'; " +
+          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+          "font-src 'self' data: https://fonts.gstatic.com; " +
+          "connect-src 'self' ws://localhost:* http://localhost:*; " +
+          "img-src 'self' data: https:; " +
+          "worker-src 'self' blob:"
+        ],
+      },
+    });
+  });
+
   win.webContents.on('context-menu', (event, params) => {
     // إنشاء قائمة مخصصة دون منع الحدث الافتراضي
 

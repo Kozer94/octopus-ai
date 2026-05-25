@@ -35,8 +35,8 @@ export function GitPanel({
       <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0' }}>
         {gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>Loading...</p>}
         {gitFiles.length === 0 && !gitLoading && <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No changes</p>}
-        {gitFiles.map((file, i) => (
-          <div key={i}
+        {gitFiles.map((file) => (
+          <div key={`${file.status}:${file.file}`}
             style={{ padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
             onMouseEnter={e => e.currentTarget.style.background = t.border + '44'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}

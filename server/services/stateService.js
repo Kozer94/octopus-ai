@@ -1,15 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 const { getProjectSnapshot } = require('../truthLayer');
+const { createEnvReader } = require('./envService');
 
-function getConfiguredProviders(env = process.env) {
+function envHas(env, key) {
+  return typeof env.has === 'function' ? env.has(key) : Boolean(env[key]);
+}
+
+function getConfiguredProviders(env = createEnvReader()) {
   return {
-    groq: Boolean(env.GROQ_API_KEY),
-    openrouter: Boolean(env.OPENROUTER_API_KEY),
-    gemini: Boolean(env.GEMINI_API_KEY),
-    mistral: Boolean(env.MISTRAL_API_KEY),
-    cohere: Boolean(env.COHERE_API_KEY),
-    together: Boolean(env.TOGETHER_API_KEY),
+    groq: envHas(env, 'GROQ_API_KEY'),
+    openrouter: envHas(env, 'OPENROUTER_API_KEY'),
+    gemini: envHas(env, 'GEMINI_API_KEY'),
+    mistral: envHas(env, 'MISTRAL_API_KEY'),
+    cohere: envHas(env, 'COHERE_API_KEY'),
+    together: envHas(env, 'TOGETHER_API_KEY'),
   };
 }
 

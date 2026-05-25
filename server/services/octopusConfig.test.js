@@ -9,7 +9,9 @@ const {
 test('isReportCommand detects Arabic and English report requests', () => {
   assert.equal(isReportCommand('اكتب تقرير عن المشروع'), true);
   assert.equal(isReportCommand('analyze this project'), true);
+  assert.equal(isReportCommand('generate report for runtime'), true);
   assert.equal(isReportCommand('create a button'), false);
+  assert.equal(isReportCommand('documentation cleanup'), false);
 });
 
 test('SYSTEM_PROMPT contains required output tags', () => {

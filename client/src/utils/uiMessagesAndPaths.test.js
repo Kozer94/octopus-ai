@@ -25,13 +25,27 @@ import {
   terminalStreamingEntry,
   terminalSystemEntry,
 } from './terminalHistory.js';
+import { bidiIsolateStyle, bidiPlainTextStyle, codeTextStyle, getTextDirection } from './bidiText.js';
 
 test('chat message helpers keep role and text shape stable', () => {
   assert.equal(INITIAL_CHAT_MESSAGES[0].role, 'octopus');
-  assert.deepEqual(userMessage('hello'), { role: 'user', text: 'hello' });
-  assert.deepEqual(octopusMessage('done'), { role: 'octopus', text: 'done' });
-  assert.deepEqual(octopusErrorMessage('bad'), { role: 'octopus', text: 'Error: bad' });
-  assert.deepEqual(octopusScanErrorMessage('scan bad'), { role: 'octopus', text: 'Scan error: scan bad' });
+  assert.match(INITIAL_CHAT_MESSAGES[0].id, /initial-octopus-ready/);
+  assert.deepEqual(
+    { role: userMessage('hello').role, text: userMessage('hello').text },
+    { role: 'user', text: 'hello' },
+  );
+  assert.deepEqual(
+    { role: octopusMessage('done').role, text: octopusMessage('done').text },
+    { role: 'octopus', text: 'done' },
+  );
+  assert.deepEqual(
+    { role: octopusErrorMessage('bad').role, text: octopusErrorMessage('bad').text },
+    { role: 'octopus', text: 'Error: bad' },
+  );
+  assert.deepEqual(
+    { role: octopusScanErrorMessage('scan bad').role, text: octopusScanErrorMessage('scan bad').text },
+    { role: 'octopus', text: 'Scan error: scan bad' },
+  );
   assert.equal(OCTOPUS_BUSY_MESSAGE.role, 'octopus');
 });
 
@@ -83,4 +97,12 @@ test('displayFilePath normalizes project-relative paths', () => {
 
 test('displayFilePath falls back to active file when no file is selected', () => {
   assert.equal(displayFilePath({ activeFile: 'README.md' }), 'README.md');
+});
+
+test('bidi text helpers preserve mixed Arabic and English rendering intent', () => {
+  assert.equal(getTextDirection('hello src/App.jsx'), 'ltr');
+  assert.equal(getTextDirection('افتح src/App.jsx'), 'rtl');
+  assert.equal(bidiPlainTextStyle().unicodeBidi, 'plaintext');
+  assert.equal(bidiIsolateStyle().unicodeBidi, 'isolate');
+  assert.equal(codeTextStyle().direction, 'ltr');
 });

@@ -1,3 +1,5 @@
+import { codeTextStyle } from '../utils/bidiText';
+
 export function TerminalApprovalModal({
   command,
   onApprove,
@@ -14,7 +16,7 @@ export function TerminalApprovalModal({
           <span style={{ fontSize: 13, color: t.text, fontWeight: 500 }}>Terminal approval</span>
         </div>
         <div style={{ padding: 14, background: t.bg }}>
-          <pre style={{ margin: 0, padding: 12, background: '#0d1117', border: `0.5px solid ${t.border}`, borderRadius: 6, color: '#e6edf3', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'JetBrains Mono, Consolas, monospace' }}>
+          <pre dir="ltr" style={codeTextStyle({ margin: 0, padding: 12, background: '#0d1117', border: `0.5px solid ${t.border}`, borderRadius: 6, color: '#e6edf3', fontSize: 12, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'JetBrains Mono, Consolas, monospace' })}>
             {command}
           </pre>
         </div>

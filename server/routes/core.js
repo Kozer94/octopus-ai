@@ -1,10 +1,12 @@
 function registerCoreRoutes(app, {
+  eventBus,
   ensureProjectMap,
   getEnabledPlugins,
   getProjectContextForTask,
   loadedPlugins,
   sessions,
   buildRealState,
+  rateLimitConfig = {},
   validateRealState,
   validateProjectBinding,
 }) {
@@ -18,11 +20,18 @@ function registerCoreRoutes(app, {
         simple: loadedPlugins.length,
         enabledSimple: getEnabledPlugins().length,
       },
+      events: {
+        recent: eventBus.getRecent({ limit: 1 }).length,
+      },
     });
   });
 
   app.get('/', (_req, res) => {
     res.json({ message: '🐙 أخطبوط يعمل!' });
+  });
+
+  app.get('/api/rate-limits', (_req, res) => {
+    res.json({ success: true, limits: rateLimitConfig });
   });
 
   app.post('/api/project-map', (req, res) => {
@@ -49,6 +58,7 @@ function registerCoreRoutes(app, {
   app.post('/api/reset', (req, res) => {
     const { sessionId = 'default' } = req.body;
     sessions[sessionId] = [];
+    eventBus.publish('session.reset', { sessionId }, { category: 'session', sessionId, source: 'coreRoutes' });
     res.json({ success: true, message: 'تم مسح المحادثة' });
   });
 

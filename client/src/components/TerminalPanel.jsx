@@ -44,12 +44,22 @@ export function TerminalPanel({
   t,
   terminalHeight,
   terminalTab,
+  workflowError,
 }) {
   const containerRef = useRef(null);
   const terminalRef = useRef(null);
   const fitAddonRef = useRef(null);
   const socketRef = useRef(null);
+  const currentDirRef = useRef(currentDir);
+  const initialThemeRef = useRef(t);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const reconnectAttemptsRef = useRef(0);
+  const MAX_RECONNECT_ATTEMPTS = 5;
+
+  useEffect(() => {
+    currentDirRef.current = currentDir;
+  }, [currentDir]);
 
   useEffect(() => {
     if (!containerRef.current || terminalRef.current) return;
@@ -62,7 +72,7 @@ export function TerminalPanel({
       fontFamily: 'JetBrains Mono, Consolas, monospace',
       fontSize: 12,
       scrollback: 5000,
-      theme: getThemeColors(t),
+      theme: getThemeColors(initialThemeRef.current),
     });
     const fitAddon = new FitAddon();
 
@@ -96,13 +106,14 @@ export function TerminalPanel({
     requestAnimationFrame(() => fitAddon.fit());
 
     return () => {
+      reconnectAttemptsRef.current = MAX_RECONNECT_ATTEMPTS; // prevent reconnect on cleanup
       socketRef.current?.close();
       terminal.dispose();
       terminalRef.current = null;
       fitAddonRef.current = null;
       socketRef.current = null;
     };
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     if (terminalRef.current) {
@@ -115,47 +126,68 @@ export function TerminalPanel({
     const fitAddon = fitAddonRef.current;
     if (!terminal || !fitAddon) return;
 
-    fitAddon.fit();
-    const socket = new WebSocket(getTerminalSocketUrl());
-    socketRef.current = socket;
+    const connectWebSocket = () => {
+      fitAddon.fit();
+      const socket = new WebSocket(getTerminalSocketUrl());
+      socketRef.current = socket;
 
-    socket.addEventListener('open', () => {
-      setConnected(true);
-      const dimensions = fitAddon.proposeDimensions();
-      socket.send(JSON.stringify({
-        type: 'start',
-        cwd: currentDir,
-        cols: dimensions?.cols || terminal.cols,
-        rows: dimensions?.rows || terminal.rows,
-      }));
-    });
+      socket.addEventListener('open', () => {
+        setConnected(true);
+        setReconnecting(false);
+        reconnectAttemptsRef.current = 0;
+        const dimensions = fitAddon.proposeDimensions();
+        socket.send(JSON.stringify({
+          type: 'start',
+          cwd: currentDirRef.current,
+          cols: dimensions?.cols || terminal.cols,
+          rows: dimensions?.rows || terminal.rows,
+        }));
+      });
 
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data);
-      if (message.type === 'data') terminal.write(message.data);
-      if (message.type === 'ready') terminal.writeln(`\x1b[32mOctopus PTY ready: ${message.cwd}\x1b[0m`);
-      if (message.type === 'exit') {
-        terminal.writeln(`\x1b[33mProcess exited with code ${message.exitCode ?? 0}\x1b[0m`);
+      socket.addEventListener('message', (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'data') terminal.write(message.data);
+        if (message.type === 'ready') terminal.writeln(`\x1b[32mOctopus PTY ready: ${message.cwd}\x1b[0m`);
+        if (message.type === 'exit') {
+          terminal.writeln(`\x1b[33mProcess exited with code ${message.exitCode ?? 0}\x1b[0m`);
+          setConnected(false);
+        }
+      });
+
+      socket.addEventListener('close', () => {
         setConnected(false);
-      }
-    });
+        if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+          setReconnecting(true);
+          reconnectAttemptsRef.current += 1;
+          const backoffMs = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
+          terminal.writeln(`\x1b[33mConnection lost. Reconnecting in ${backoffMs / 1000}s... (${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m`);
+          setTimeout(() => {
+            connectWebSocket();
+          }, backoffMs);
+        } else {
+          terminal.writeln('\x1b[31mMax reconnection attempts reached. Please close and reopen the terminal.\x1b[0m');
+          setReconnecting(false);
+        }
+      });
 
-    socket.addEventListener('close', () => setConnected(false));
-    socket.addEventListener('error', () => {
-      setConnected(false);
-      terminal.writeln('\x1b[31mPTY connection failed\x1b[0m');
-    });
+      socket.addEventListener('error', () => {
+        setConnected(false);
+        terminal.writeln('\x1b[31mPTY connection failed\x1b[0m');
+      });
+    };
+
+    connectWebSocket();
 
     const inputDisposable = terminal.onData(data => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'input', data }));
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({ type: 'input', data }));
       }
     });
 
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
+      if (socketRef.current?.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({ type: 'resize', cols: terminal.cols, rows: terminal.rows }));
       }
     });
     resizeObserver.observe(containerRef.current);
@@ -163,9 +195,10 @@ export function TerminalPanel({
     return () => {
       inputDisposable.dispose();
       resizeObserver.disconnect();
-      socket.close();
+      socketRef.current?.close();
+      reconnectAttemptsRef.current = MAX_RECONNECT_ATTEMPTS;
     };
-  }, [currentDir]);
+  }, []);
 
   const clearTerminal = () => {
     terminalRef.current?.clear();
@@ -192,8 +225,8 @@ export function TerminalPanel({
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: connected || isRunning ? '#7ee787' : t.textMuted, padding: '0 8px' }}>
-          {connected || isRunning ? 'PTY' : 'Offline'}
+        <span style={{ fontSize: 11, color: workflowError ? '#ff7b72' : reconnecting ? '#f0883e' : connected || isRunning ? '#7ee787' : t.textMuted, padding: '0 8px' }}>
+          {workflowError ? 'AI issue' : reconnecting ? 'Reconnecting...' : connected || isRunning ? 'PTY' : 'Offline'}
         </span>
         <button title="Interrupt (Ctrl+C)" style={{ background: 'transparent', border: 'none', color: '#ff7b72', cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={interruptTerminal}>
           <i className="codicon codicon-debug-stop" style={{ fontSize: 14 }} />

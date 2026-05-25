@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 const chokidar = require('chokidar');
 const { isSensitiveFile } = require('../services/fileService');
@@ -15,6 +16,15 @@ function shouldIgnoreProjectItem(name) {
 function resolveExistingDirectory(dirPath, fallback = process.cwd()) {
   const resolved = path.resolve(dirPath || fallback);
   const stat = fs.statSync(resolved);
+  if (!stat.isDirectory()) {
+    throw new Error('المسار ليس مجلداً');
+  }
+  return resolved;
+}
+
+async function resolveExistingDirectoryAsync(dirPath, fallback = process.cwd()) {
+  const resolved = path.resolve(dirPath || fallback);
+  const stat = await fsp.stat(resolved);
   if (!stat.isDirectory()) {
     throw new Error('المسار ليس مجلداً');
   }
@@ -83,30 +93,40 @@ function registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatche
 
   app.post('/api/search', async (req, res) => {
     try {
-      const { query, dirPath } = req.body;
+      const { query, dirPath, limit = 100 } = req.body;
       if (!query || !dirPath) return res.json({ success: true, results: [] });
 
       const results = [];
-      const rootDir = resolveExistingDirectory(dirPath);
+      const maxResults = Math.min(Math.max(Number(limit) || 100, 1), 250);
+      const rootDir = await resolveExistingDirectoryAsync(dirPath);
       const normalizedQuery = String(query).toLowerCase();
+      let scannedFiles = 0;
+      let truncated = false;
 
-      function searchDir(dir) {
-        if (results.length >= 100) return;
-        const items = fs.readdirSync(dir, { withFileTypes: true });
+      async function searchDir(dir, depth = 0) {
+        if (results.length >= maxResults || scannedFiles >= 2000 || depth > 8) {
+          truncated = true;
+          return;
+        }
+        const items = await fsp.readdir(dir, { withFileTypes: true });
         for (const item of items) {
-          if (results.length >= 100) return;
+          if (results.length >= maxResults || scannedFiles >= 2000) {
+            truncated = true;
+            return;
+          }
           if (shouldIgnoreProjectItem(item.name) || isSensitiveFile(item.name)) continue;
           const fullPath = path.join(dir, item.name);
           if (item.isDirectory()) {
-            searchDir(fullPath);
+            await searchDir(fullPath, depth + 1);
           } else {
             try {
-              const stat = fs.statSync(fullPath);
+              scannedFiles += 1;
+              const stat = await fsp.stat(fullPath);
               if (stat.size > 1024 * 1024) continue;
-              const content = fs.readFileSync(fullPath, 'utf8');
+              const content = await fsp.readFile(fullPath, 'utf8');
               const lines = content.split('\n');
               lines.forEach((line, i) => {
-                if (results.length < 100 && line.toLowerCase().includes(normalizedQuery)) {
+                if (results.length < maxResults && line.toLowerCase().includes(normalizedQuery)) {
                   results.push({
                     file: item.name,
                     path: fullPath,
@@ -120,8 +140,8 @@ function registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatche
         }
       }
 
-      searchDir(rootDir);
-      res.json({ success: true, results });
+      await searchDir(rootDir);
+      res.json({ success: true, results, meta: { count: results.length, limit: maxResults, scannedFiles, truncated } });
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
@@ -131,5 +151,6 @@ function registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatche
 module.exports = {
   registerWorkspaceRoutes,
   resolveExistingDirectory,
+  resolveExistingDirectoryAsync,
   shouldIgnoreProjectItem,
 };

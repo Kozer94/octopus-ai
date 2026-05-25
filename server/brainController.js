@@ -30,6 +30,15 @@ function detectMode(command) {
   return MODES.CODE;
 }
 
+// ─── Legs المطلوبة حسب نوع الطلب (تقليل الحمل على AI providers) ──
+const MODE_LEGS = {
+  report:   [1, 2, 8],           // كتابة + فحص + دمج
+  debug:    [2, 3, 8],           // فحص + تعديل + دمج
+  explain:  [2, 8],              // فحص + دمج
+  refactor: [3, 2, 8],           // تعديل + فحص + دمج
+  code:     [1, 3, 2, 6, 7, 8], // كامل بدون Manager/Test للتخفيف
+};
+
 // ─── Dependency Graph حقيقي بين الأرجل ──────────────────────
 // كل رجل يحدد أي الأرجل يجب أن تنتهي قبله
 const LEG_DEPS = {
@@ -209,6 +218,36 @@ function buildReviewContext(legResults) {
     .join('\n\n---\n\n');
 }
 
+function normalizePlan(plan, command, mode) {
+  const fallback = {
+    mode,
+    decision: command,
+    rejected: '',
+    tasks: buildDefaultTasks(command),
+  };
+
+  if (!plan || typeof plan !== 'object') return fallback;
+
+  const tasks = Array.isArray(plan.tasks) && plan.tasks.length > 0
+    ? plan.tasks.map(task => ({
+      leg: Number(task.leg),
+      active: task.active !== false,
+      task: typeof task.task === 'string' && task.task.trim() ? task.task : command,
+      file: typeof task.file === 'string' ? task.file : '',
+      prompt: typeof task.prompt === 'string' ? task.prompt : '',
+    })).filter(task => Number.isInteger(task.leg) && LEG_DEFINITIONS[task.leg])
+    : fallback.tasks;
+
+  return {
+    ...fallback,
+    ...plan,
+    mode: typeof plan.mode === 'string' ? plan.mode : mode,
+    decision: typeof plan.decision === 'string' && plan.decision.trim() ? plan.decision : fallback.decision,
+    rejected: typeof plan.rejected === 'string' ? plan.rejected : fallback.rejected,
+    tasks: tasks.length > 0 ? tasks : fallback.tasks,
+  };
+}
+
 // ─── تحليل نتائج الأرجل لرجل الدمج ──────────────────────────
 function buildMergeContext(legResults, command, mode) {
   const sections = legResults.filter(r => r.result).map(r => r.result).join('\n\n---\n\n');
@@ -278,7 +317,7 @@ async function runBrainController({
 
   tick(0, 'snapshot_ready', { frameworks: snapshot.frameworks, mode });
 
-  // ② المهندس 1 و2 بالتوازي
+  // ② المهندس 1 و2 بالتوازي — مع حماية من فشل provider واحد
   tick(1, 'thinking');
   tick(2, 'thinking');
 
@@ -286,12 +325,14 @@ async function runBrainController({
     callAI([
       { role: 'system', content: buildEngineer1Prompt(activeFile) },
       { role: 'user',   content: `${snapshot.summary}\n\n${baseContext}\n\nطلب المستخدم: ${command}` },
-    ]).then(r => { tick(1, 'ideas_ready'); return r; }),
+    ], 1500).then(r => { tick(1, 'ideas_ready'); return r; })
+      .catch(e => { tick(1, 'error', { error: e.message }); return `المهندس 1 غير متاح: ${e.message}`; }),
 
     callAI([
       { role: 'system', content: buildEngineer2Prompt() },
       { role: 'user',   content: `${snapshot.summary}\n\nطلب المستخدم: ${command}` },
-    ]).then(r => { tick(2, 'ideas_ready'); return r; }),
+    ], 1500).then(r => { tick(2, 'ideas_ready'); return r; })
+      .catch(e => { tick(2, 'error', { error: e.message }); return `المهندس 2 غير متاح: ${e.message}`; }),
   ]);
 
   // ③ العقل المدبر يقرر
@@ -299,7 +340,7 @@ async function runBrainController({
   const brainRaw = await callAI([{
     role: 'user',
     content: buildBrainPrompt(command, eng1Result, eng2Result, snapshot, activeFile),
-  }]);
+  }], 2000);
 
   let plan;
   try {
@@ -308,28 +349,38 @@ async function runBrainController({
   } catch {
     plan = { mode, decision: command, rejected: '', tasks: buildDefaultTasks(command) };
   }
+  plan = normalizePlan(plan, command, mode);
 
   tick(0, 'plan_ready', { plan });
 
   // ④ تنفيذ الأرجل مع dependency graph حقيقي
-  const activeTasks = plan.tasks.filter(t => t.active !== false);
+  // تصفية الأرجل حسب نوع الطلب لتقليل الحمل على AI providers
+  const allowedLegs = MODE_LEGS[mode] || MODE_LEGS.code;
+  const activeTasks = plan.tasks
+    .filter(t => t.active !== false)
+    .filter(t => allowedLegs.includes(t.leg));
   const legResults  = [];
   const legStatus   = {};   // legId → 'pending' | 'running' | 'done' | 'error'
   activeTasks.forEach(t => { legStatus[t.leg] = 'pending'; });
 
   // انتظار حتى تنتهي الأرجل المطلوبة
-  function waitFor(deps) {
-    return new Promise(resolve => {
+  function waitFor(deps, timeoutMs = 30000) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + timeoutMs;
       function check() {
         if (deps.every(d => legStatus[d] === 'done' || legStatus[d] === 'error' || !legStatus[d])) {
-          resolve();
-        } else {
-          setTimeout(check, 100);
+          return resolve();
         }
+        if (Date.now() >= deadline) {
+          return reject(new Error(`waitFor timeout: legs [${deps}] لم تنته خلال ${timeoutMs}ms`));
+        }
+        setTimeout(check, 100);
       }
       check();
     });
   }
+
+  const LEG_TIMEOUT_MS = 60000; // دقيقة واحدة — كافية مع وجود fallback providers
 
   // تشغيل رجل واحد
   async function runLeg(task) {
@@ -346,7 +397,15 @@ async function runBrainController({
     legStatus[task.leg] = 'running';
     tick(task.leg, 'working', { task: task.task, file: task.file });
 
-    try {
+    // timeout guard — منع أي رجل من الإعاقة إلى الأبد
+    let legTimeoutId;
+    const legTimeoutPromise = new Promise((_, reject) => {
+      legTimeoutId = setTimeout(() => {
+        reject(new Error(`Leg ${task.leg} timed out after ${LEG_TIMEOUT_MS}ms`));
+      }, LEG_TIMEOUT_MS);
+    });
+
+    const legWork = async () => {
       // رجل الفحص يحتاج نتائج الأرجل الأخرى
       let contextForLeg = baseContext;
       if (task.leg === 2) {
@@ -390,7 +449,14 @@ async function runBrainController({
       tick(task.leg, 'done', { result: result.slice(0, 200) });
       legResults.push({ legId: task.leg, result });
       return result;
+    };
+
+    try {
+      const result = await Promise.race([legWork(), legTimeoutPromise]);
+      clearTimeout(legTimeoutId);
+      return result;
     } catch (e) {
+      clearTimeout(legTimeoutId);
       legStatus[task.leg] = 'error';
       tick(task.leg, 'error', { error: e.message });
       legResults.push({ legId: task.leg, result: '', error: e.message });
@@ -436,7 +502,7 @@ async function runBrainController({
 }
 
 // ─── preview بدون تنفيذ ───────────────────────────────────────
-async function previewBrainController({ command, projectDir, callAI }) {
+async function previewBrainController({ command, projectDir, activeFile = '', activeFileContent = '', callAI }) {
   const snapshot = getProjectSnapshot(projectDir);
   const mode     = detectMode(command);
 
@@ -463,6 +529,7 @@ async function previewBrainController({ command, projectDir, callAI }) {
   } catch {
     plan = { mode, decision: command, rejected: '', tasks: buildDefaultTasks(command) };
   }
+  plan = normalizePlan(plan, command, mode);
 
   return { mode, plan, eng1Result: eng1, eng2Result: eng2, snapshot };
 }

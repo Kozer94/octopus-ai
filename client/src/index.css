@@ -7,3 +7,18 @@
 body {
   background: #0a0a0f;
 }
+
+/* Prevent text overflow in flex/grid children */
+[style*="display: flex"] > span,
+[style*="display:flex"] > span,
+[style*="display: grid"] > span,
+[style*="display:grid"] > span {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-respects-reduced-motion] {
+    animation: none !important;
+    transition: none !important;
+  }
+}

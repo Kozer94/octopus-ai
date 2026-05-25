@@ -1,13 +1,18 @@
 export const INITIAL_CHAT_MESSAGES = [
-  { role: 'octopus', text: "Hello 🐙 I'm ready. Tell me what you want to build." },
+  { id: 'initial-octopus-ready', role: 'octopus', text: "Hello 🐙 I'm ready. Tell me what you want to build." },
 ];
 
+function createMessageId(role) {
+  const randomPart = globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2);
+  return `${role}_${Date.now()}_${randomPart}`;
+}
+
 export function userMessage(text) {
-  return { role: 'user', text };
+  return { id: createMessageId('user'), role: 'user', text };
 }
 
 export function octopusMessage(text) {
-  return { role: 'octopus', text };
+  return { id: createMessageId('octopus'), role: 'octopus', text };
 }
 
 export function octopusErrorMessage(error) {
@@ -18,6 +23,16 @@ export function octopusScanErrorMessage(error) {
   return octopusMessage(`Scan error: ${error}`);
 }
 
+export function octopusRateLimitMessage(resetAt) {
+  if (resetAt) {
+    const seconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+    return octopusMessage(`⏱️ Too many requests. Please wait ${seconds}s before trying again.`);
+  }
+  return octopusMessage('⏱️ Too many requests. Please wait a moment before trying again.');
+}
+
+export const OCTOPUS_SLOW_MESSAGE = octopusMessage('⏳ Still working... AI providers are busy. This may take up to 90s.');
+export const OCTOPUS_TIMEOUT_MESSAGE = octopusMessage('⚠️ Request timed out. The AI providers are overloaded — please try again.');
 export const OCTOPUS_BUSY_MESSAGE = octopusMessage('⏳ Please confirm or cancel the current plan first.');
 export const OCTOPUS_CONNECT_ERROR_MESSAGE = octopusMessage('⚠️ Could not connect to server.');
 export const OCTOPUS_SCANNING_MESSAGE = octopusMessage('🔍 Octopus is scanning the project and building an execution plan...');

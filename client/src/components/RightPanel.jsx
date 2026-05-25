@@ -1,25 +1,42 @@
+import { AuditorPanel } from '../auditor/AuditorPanel';
 import { cleanChatText } from '../utils/diffUtils';
+import { bidiIsolateStyle, bidiPlainTextStyle } from '../utils/bidiText';
 import { getFileIcon } from '../utils/fileIcons';
+import { RuntimeInspectorPanel } from './RuntimeInspectorPanel';
+import { TimelinePanel } from './TimelinePanel';
 
 const RIGHT_PANEL_ITEMS = [
   { id: 'chat',    icon: 'codicon-comment-discussion', title: 'Chat' },
   { id: 'legs',    icon: 'codicon-pulse',              title: 'Legs' },
+  { id: 'timeline', icon: 'codicon-list-ordered',      title: 'Timeline' },
+  { id: 'inspector', icon: 'codicon-debug-alt',         title: 'Runtime' },
   { id: 'context', icon: 'codicon-list-tree',          title: 'Context' },
   { id: 'history', icon: 'codicon-history',            title: 'History' },
+  { id: 'audit',   icon: 'codicon-shield-check',       title: 'Audit' },
 ];
 
 function getPanelIcon(tab) {
   if (tab === 'chat') return 'codicon-comment-discussion';
   if (tab === 'legs') return 'codicon-pulse';
+  if (tab === 'timeline') return 'codicon-list-ordered';
+  if (tab === 'inspector') return 'codicon-debug-alt';
   if (tab === 'context') return 'codicon-list-tree';
+  if (tab === 'audit') return 'codicon-shield-check';
   return 'codicon-history';
 }
 
 function getPanelTitle(tab) {
   if (tab === 'chat') return 'CHAT';
   if (tab === 'legs') return 'EIGHT LEGS';
+  if (tab === 'timeline') return 'LIVE TIMELINE';
+  if (tab === 'inspector') return 'RUNTIME';
   if (tab === 'context') return 'CONTEXT';
+  if (tab === 'audit') return 'AUDIT';
   return 'HISTORY';
+}
+
+function getMessageKey(message) {
+  return message.id || `${message.role}:${message.at || ''}:${message.text?.slice(0, 80) || ''}`;
 }
 
 export function RightPanel({
@@ -36,19 +53,35 @@ export function RightPanel({
   loading,
   messages,
   onResizeStart,
+  onScan,
+  onTimelineClear,
   onKey,
   projectName,
   reset,
   rightPanelOpen,
   rightPanelTab,
   rightPanelWidth,
+  runtimeGraph,
+  runtimeMetrics,
+  runtimeControlPlane,
+  runtimeReplay,
+  runtimeTasks,
+  runtimeTrace,
+  runtimeTree,
+  runtimeWorkers,
   send,
+  selectedRuntimeTask,
   setActiveFile,
   setInput,
+  setSelectedRuntimeTask,
   setRightPanelOpen,
   setRightPanelTab,
   setTerminalOpen,
   t,
+  timelineEvents,
+  auditResults,
+  onAuditRun,
+  onRuntimeRefresh,
 }) {
   const legColor = (status) => status === "done" ? "#3fb950" : status === "working" ? "#f0883e" : t.textMuted;
   const openFiles = files.filter(file => file.content);
@@ -73,6 +106,12 @@ export function RightPanel({
             )}
             {item.id === 'legs' && legs.some(leg => leg.status === 'working') && (
               <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f0883e' }} />
+            )}
+            {item.id === 'timeline' && timelineEvents.length > 0 && (
+              <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#58a6ff' }} />
+            )}
+            {item.id === 'inspector' && runtimeTasks.length > 0 && (
+              <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, borderRadius: '50%', background: '#f778ba' }} />
             )}
           </button>
         ))}
@@ -111,7 +150,7 @@ export function RightPanel({
                   <span style={{ fontSize: 11, color: legColor(leg.status), fontWeight: 500 }}>{leg.name}</span>
                   <span style={{ marginRight: 'auto', fontSize: 10, color: t.textMuted }}>{leg.progress}%</span>
                 </div>
-                <p style={{ fontSize: 10, color: t.textMuted, margin: "0 0 4px" }}>{leg.task}</p>
+                <p dir="auto" style={bidiPlainTextStyle({ fontSize: 10, color: t.textMuted, margin: "0 0 4px" })}>{leg.task}</p>
                 <div style={{ background: t.border, borderRadius: 3, height: 2 }}>
                   <div style={{ background: leg.status === "done" ? "#3fb950" : "#f0883e", width: `${leg.progress}%`, height: "100%", borderRadius: 3, transition: "width 0.2s ease" }} />
                 </div>
@@ -120,11 +159,32 @@ export function RightPanel({
           </div>
         )}
 
+        {rightPanelTab === 'timeline' && (
+          <TimelinePanel events={timelineEvents} onClear={onTimelineClear} t={t} />
+        )}
+
+        {rightPanelTab === 'inspector' && (
+          <RuntimeInspectorPanel
+            graph={runtimeGraph}
+            metrics={runtimeMetrics}
+            controlPlane={runtimeControlPlane}
+            onRefresh={onRuntimeRefresh}
+            onSelectTask={setSelectedRuntimeTask}
+            selectedTask={selectedRuntimeTask}
+            tasks={runtimeTasks}
+            trace={runtimeTrace}
+            replay={runtimeReplay}
+            tree={runtimeTree}
+            t={t}
+            workers={runtimeWorkers}
+          />
+        )}
+
         {rightPanelTab === 'chat' && (
           <>
             <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
-              {messages.map((message, i) => (
-                <div key={i} style={{ marginBottom: 10 }}>
+              {messages.map((message) => (
+                <div key={getMessageKey(message)} style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                     <div style={{ width: 18, height: 18, borderRadius: '50%', background: message.role === 'octopus' ? t.accent + '33' : t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
                       {message.role === 'octopus' ? '🐙' : '👤'}
@@ -133,8 +193,8 @@ export function RightPanel({
                       {message.role === "octopus" ? "Octopus" : "You"}
                     </span>
                   </div>
-                  <div style={{ marginRight: 23, background: message.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}` }}>
-                    <p style={{ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <div style={{ marginRight: 23, background: message.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}`, overflow: 'hidden', minWidth: 0 }}>
+                    <p dir="auto" style={bidiPlainTextStyle({ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" })}>
                       {message.role === 'octopus' ? cleanChatText(message.text) : message.text}
                     </p>
                   </div>
@@ -161,7 +221,7 @@ export function RightPanel({
                   onKeyDown={onKey}
                   placeholder="Type your command..."
                   rows={2}
-                  dir="ltr"
+                  dir="auto"
                 />
                 <button
                   style={{ background: loading ? t.border : t.accent, border: 'none', borderRadius: 6, color: '#fff', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
@@ -175,6 +235,14 @@ export function RightPanel({
                   onClick={() => setTerminalOpen(open => !open)}>
                   <i className="codicon codicon-terminal" style={{ fontSize: 12 }} /> Terminal
                 </button>
+                <button
+                  title="فحص المشروع وكتابة report.md (بدون AI tokens)"
+                  style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, opacity: loading ? 0.5 : 1 }}
+                  onClick={onScan}
+                  disabled={loading}
+                >
+                  <i className="codicon codicon-search" style={{ fontSize: 12 }} /> Scan Project
+                </button>
               </div>
             </div>
           </>
@@ -185,14 +253,14 @@ export function RightPanel({
             <p style={{ fontSize: 11, color: t.textMuted, marginBottom: 10 }}>Open files in context</p>
             {openFiles.length === 0
               ? <p style={{ fontSize: 11, color: t.textMuted, opacity: 0.5 }}>No open files</p>
-              : openFiles.slice(0, 5).map((file, i) => {
+              : openFiles.slice(0, 5).map((file) => {
                   const { icon, color } = getFileIcon(file.name);
                   return (
-                    <div key={i} title={displayFilePath(file)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 4, background: file.name === activeFile ? t.accent + '11' : t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
+                    <div key={file.path || file.name} title={displayFilePath(file)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 4, background: file.name === activeFile ? t.accent + '11' : t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
                       onClick={() => setActiveFile(file.name)}>
                       <i className={`codicon ${icon}`} style={{ color, fontSize: 13 }} />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayFilePath(file)}</p>
+                      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <p dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{displayFilePath(file)}</p>
                         <p style={{ fontSize: 10, color: t.textMuted, margin: 0 }}>{file.content?.split('\n').length || 0} lines</p>
                       </div>
                       {file.name === activeFile && <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.accent, flexShrink: 0 }} />}
@@ -209,9 +277,13 @@ export function RightPanel({
                 <i className="codicon codicon-folder" style={{ color: t.accent, fontSize: 13 }} />
                 {projectName}
               </p>
-              {currentDir && <p style={{ fontSize: 10, color: t.textMuted, margin: '4px 0 0', wordBreak: 'break-all' }}>{currentDir}</p>}
+              {currentDir && <p dir="auto" style={bidiIsolateStyle({ fontSize: 10, color: t.textMuted, margin: '4px 0 0', wordBreak: 'break-all' })}>{currentDir}</p>}
             </div>
           </div>
+        )}
+
+        {rightPanelTab === 'audit' && (
+          <AuditorPanel auditResults={auditResults || []} onRun={onAuditRun} t={t} />
         )}
 
         {rightPanelTab === 'history' && (
@@ -219,13 +291,13 @@ export function RightPanel({
             <p style={{ fontSize: 11, color: t.textMuted, marginBottom: 10 }}>Command history</p>
             {userMessages.length === 0
               ? <p style={{ fontSize: 11, color: t.textMuted, opacity: 0.5 }}>No previous commands</p>
-              : userMessages.map((message, i) => (
-                <div key={i} style={{ padding: '7px 10px', borderRadius: 6, marginBottom: 4, background: t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
+              : userMessages.map((message) => (
+                <div key={getMessageKey(message)} style={{ padding: '7px 10px', borderRadius: 6, marginBottom: 4, background: t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
                   onClick={() => { setInput(message.text); setRightPanelTab('chat'); }}
                   onMouseEnter={e => e.currentTarget.style.background = t.border + '44'}
                   onMouseLeave={e => e.currentTarget.style.background = t.bg}
                 >
-                  <p style={{ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message.text}</p>
+                  <p dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{message.text}</p>
                 </div>
               ))
             }

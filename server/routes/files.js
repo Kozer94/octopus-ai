@@ -1,19 +1,23 @@
 const path = require('path');
 const {
-  deleteProjectFile,
-  listProjectFiles,
-  readProjectFile,
-  renameProjectFile,
-  writeProjectFile,
+  deleteProjectFileAsync,
+  listProjectFilesAsync,
+  readProjectFileAsync,
+  renameProjectFileAsync,
+  writeProjectFileAsync,
 } = require('../services/fileService');
+const { readObject, readString } = require('../services/inputValidation');
 
-function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
+function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus }) {
   app.post('/api/files/write', async (req, res) => {
     try {
-      const { filePath, content, projectDir, clientProjectName = '' } = req.body;
-      if (!filePath) return res.status(400).json({ success: false, error: 'filePath مطلوب' });
+      const body = readObject(req.body, 'body');
+      const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
+      const content = body.content === undefined || body.content === null ? '' : String(body.content);
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const clientProjectName = readString(body.clientProjectName, 'clientProjectName', { max: 200 });
 
-      const { fullPath, projectRoot } = writeProjectFile({
+      const { fullPath, projectRoot } = await writeProjectFileAsync({
         projectDir,
         clientProjectName,
         filePath,
@@ -27,6 +31,10 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
         source: 'editor',
         details: `saved ${String(content ?? '').length} chars`,
       });
+      eventBus.publish('file.written', {
+        filePath,
+        size: String(content ?? '').length,
+      }, { category: 'file', source: 'fileService' });
       try { ensureProjectMap(projectRoot, { force: true }); } catch { }
       res.json({ success: true, path: fullPath });
     } catch (error) {
@@ -36,11 +44,13 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
 
   app.post('/api/files/read', async (req, res) => {
     try {
-      const { filePath, projectDir, clientProjectName = '' } = req.body;
-      if (!filePath) return res.status(400).json({ success: false, error: 'filePath مطلوب' });
+      const body = readObject(req.body, 'body');
+      const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const clientProjectName = readString(body.clientProjectName, 'clientProjectName', { max: 200 });
 
-      const { content } = readProjectFile({ projectDir, clientProjectName, filePath });
-      res.json({ success: true, content });
+      const { content, size } = await readProjectFileAsync({ projectDir, clientProjectName, filePath });
+      res.json({ success: true, content, meta: { size } });
     } catch (error) {
       res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
@@ -48,14 +58,21 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
 
   app.post('/api/files/list', async (req, res) => {
     try {
-      const { dirPath } = req.body;
-      const { rootDir, name, items } = listProjectFiles(dirPath);
+      const body = readObject(req.body, 'body');
+      const dirPath = readString(body.dirPath, 'dirPath', { max: 1000 });
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const allowedRoot = projectDir ? path.resolve(projectDir) : null;
+      const { rootDir, name, items, meta } = await listProjectFilesAsync(dirPath, allowedRoot, {
+        maxItems: Math.min(Number(body.limit) || 1000, 2000),
+        maxDepth: Math.min(Number(body.depth) || 8, 12),
+      });
       try { ensureProjectMap(rootDir); } catch { }
       res.json({
         success: true,
         rootDir,
         name,
         items,
+        meta,
       });
     } catch (error) {
       res.status(error.statusCode || 500).json({ success: false, error: error.message });
@@ -64,16 +81,19 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
 
   app.post('/api/files/delete', async (req, res) => {
     try {
-      const { filePath, projectDir, clientProjectName = '' } = req.body;
-      if (!filePath) return res.status(400).json({ success: false, error: 'filePath مطلوب' });
+      const body = readObject(req.body, 'body');
+      const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const clientProjectName = readString(body.clientProjectName, 'clientProjectName', { max: 200 });
 
-      const { projectRoot, fullPath } = deleteProjectFile({ projectDir, clientProjectName, filePath });
+      const { projectRoot, fullPath } = await deleteProjectFileAsync({ projectDir, clientProjectName, filePath });
       appendTodoUpdate({
         projectRoot,
         filePath: fullPath,
         action: 'delete',
         source: 'editor',
       });
+      eventBus.publish('file.deleted', { filePath }, { category: 'file', source: 'fileService' });
       try { ensureProjectMap(projectRoot, { force: true }); } catch { }
       res.json({ success: true });
     } catch (error) {
@@ -83,10 +103,13 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
 
   app.post('/api/files/rename', async (req, res) => {
     try {
-      const { oldPath, newPath, projectDir, clientProjectName = '' } = req.body;
-      if (!oldPath || !newPath) return res.status(400).json({ success: false, error: 'oldPath و newPath مطلوبان' });
+      const body = readObject(req.body, 'body');
+      const oldPath = readString(body.oldPath, 'oldPath', { required: true, max: 1000 });
+      const newPath = readString(body.newPath, 'newPath', { required: true, max: 1000 });
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const clientProjectName = readString(body.clientProjectName, 'clientProjectName', { max: 200 });
 
-      const { projectRoot, oldPath: renamedOldPath, newPath: renamedNewPath } = renameProjectFile({
+      const { projectRoot, oldPath: renamedOldPath, newPath: renamedNewPath } = await renameProjectFileAsync({
         projectDir,
         clientProjectName,
         oldPath,
@@ -99,6 +122,10 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate }) {
         source: 'editor',
         details: `from ${path.relative(projectRoot, renamedOldPath).replace(/\\/g, '/')}`,
       });
+      eventBus.publish('file.renamed', {
+        oldPath,
+        newPath,
+      }, { category: 'file', source: 'fileService' });
       try { ensureProjectMap(projectRoot, { force: true }); } catch { }
       res.json({ success: true });
     } catch (error) {

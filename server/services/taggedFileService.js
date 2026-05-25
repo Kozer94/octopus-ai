@@ -1,4 +1,5 @@
 const path = require('path');
+const { isProtectedFile } = require('./protectedFiles');
 
 function createTaggedFileSaver({
   appendTodoUpdate,
@@ -12,27 +13,13 @@ function createTaggedFileSaver({
     const savedFiles = [];
     const rootDir = projectDir ? path.resolve(projectDir) : process.cwd();
 
-    const protectedFiles = [
-      'package.json',
-      'package-lock.json',
-      'main.js',
-      'preload.js',
-      '.env',
-      'server/index.js',
-      'client/src/App.jsx',
-    ];
-
     for (const match of fileMatches) {
       const filePath = match[1];
       const fileContent = match[2].trim();
 
       if (filePath.toLowerCase() === 'terminal') continue;
 
-      const isProtected = protectedFiles.some(p =>
-        filePath === p || filePath.endsWith(p) || path.basename(filePath) === 'package.json'
-      );
-
-      if (isProtected) {
+      if (isProtectedFile(filePath)) {
         console.warn(`🛡️ ملف محمي، تم تجاهله: ${filePath}`);
         continue;
       }

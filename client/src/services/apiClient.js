@@ -1,44 +1,122 @@
-import { BACKEND } from '../config/uiConfig';
+import { BACKEND } from '../config/uiConfig.js';
 
 async function parseJsonResponse(response) {
   return response.json();
 }
 
+function getAuthHeaders() {
+  const storedToken = globalThis.localStorage?.getItem('octopusApiToken') || '';
+  const envToken = import.meta.env?.VITE_OCTOPUS_API_TOKEN || '';
+  const token = storedToken || envToken;
+  return token ? { 'X-Octopus-Token': token } : {};
+}
+
+function buildRateLimitError(response, data = {}) {
+  const resetHeader = response.headers.get('RateLimit-Reset');
+  const err = new Error(data.error || 'طلبات كثيرة جداً، الرجاء المحاولة لاحقاً');
+  err.rateLimited = true;
+  err.status = 429;
+  if (resetHeader) err.resetAt = Number(resetHeader) * 1000;
+  return err;
+}
+
 export async function postJson(path, body, options = {}) {
   const response = await fetch(`${BACKEND}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
     signal: options.signal,
   });
+
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw buildRateLimitError(response, data);
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Server error ${response.status} — أعد تشغيل السيرفر`);
+  }
 
   return parseJsonResponse(response);
 }
 
 export async function getJson(path) {
-  const response = await fetch(`${BACKEND}${path}`);
+  const response = await fetch(`${BACKEND}${path}`, { headers: getAuthHeaders() });
+
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw buildRateLimitError(response, data);
+  }
+
   return parseJsonResponse(response);
 }
 
-export async function postEventStream(path, body, { onMessage, signal } = {}) {
+export async function postEventStream(path, body, { onMessage, requireComplete = false, signal } = {}) {
   const response = await fetch(`${BACKEND}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
     signal,
   });
+
+  if (response.status === 429) {
+    const data = await response.json().catch(() => ({}));
+    throw buildRateLimitError(response, data);
+  }
 
   if (!response.ok || !response.body) {
     const data = await parseJsonResponse(response).catch(() => ({}));
     throw new Error(data.error || `Request failed with ${response.status}`);
   }
 
+  const INACTIVITY_TIMEOUT_MS = 120_000;
+
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let completeData = null;
+  let streamError = null;
+
+  function consumeEvent(rawEvent) {
+    const lines = rawEvent.split('\n');
+    const eventName = lines
+      .find(item => item.startsWith('event: '))
+      ?.slice(7)
+      .trim() || 'message';
+    const dataText = lines
+      .filter(item => item.startsWith('data: '))
+      .map(item => item.slice(6))
+      .join('\n');
+
+    if (!dataText) return;
+
+    const data = JSON.parse(dataText);
+    onMessage?.(data, eventName);
+
+    if (eventName === 'complete') completeData = data;
+    if (eventName === 'error') {
+      streamError = new Error(data.error || data.message || 'Stream failed');
+    }
+  }
 
   while (true) {
-    const { done, value } = await reader.read();
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reader.cancel();
+        reject(new Error('Stream timed out: no event received for 120 seconds'));
+      }, INACTIVITY_TIMEOUT_MS);
+    });
+
+    let chunk;
+    try {
+      chunk = await Promise.race([reader.read(), timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const { done, value } = chunk;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
@@ -46,15 +124,16 @@ export async function postEventStream(path, body, { onMessage, signal } = {}) {
     buffer = events.pop() || '';
 
     for (const event of events) {
-      const line = event.split('\n').find(item => item.startsWith('data: '));
-      if (!line) continue;
-      onMessage?.(JSON.parse(line.slice(6)));
+      consumeEvent(event);
     }
   }
 
-  if (buffer.trim().startsWith('data: ')) {
-    onMessage?.(JSON.parse(buffer.trim().slice(6)));
+  if (buffer.trim()) consumeEvent(buffer.trim());
+  if (streamError) throw streamError;
+  if (requireComplete && !completeData) {
+    throw new Error('Stream disconnected before completion');
   }
+  return completeData;
 }
 
 export const filesApi = {
@@ -87,9 +166,98 @@ export const terminalApi = {
   stop: () => postJson('/api/stop', {}),
 };
 
+function timedAbortSignal(ms) {
+  const ac = new AbortController();
+  const id = setTimeout(() => ac.abort(), ms);
+  ac.signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+  return ac.signal;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function waitForOctopusJob(jobId, { intervalMs = 1000, timeoutMs = 310_000 } = {}) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const data = await getJson(`/api/octopus/jobs/${encodeURIComponent(jobId)}`);
+    const job = data.job;
+    if (job?.status === 'completed') return job.result;
+    if (job?.status === 'failed') throw new Error(job.error || 'Job failed');
+    if (job?.status === 'cancelled') throw new Error(job.error || 'Job cancelled');
+    await delay(intervalMs);
+  }
+  throw new Error('Job polling timed out');
+}
+
+async function resolveQueuedOctopusResponse(response, options = {}) {
+  if (!response?.queued || !response.jobId) return response;
+  return waitForOctopusJob(response.jobId, options);
+}
+
 export const octopusApi = {
-  send: payload => postJson('/api/octopus', payload),
-  preview: ({ command, projectDir }) => postJson('/api/octopus/preview', { command, projectDir }),
-  parallel: payload => postJson('/api/octopus/parallel', payload),
+  send: payload => postJson('/api/octopus', payload, { signal: timedAbortSignal(30_000) })
+    .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 120_000 })),
+  preview: ({ command, projectDir }) => postJson('/api/octopus/preview', { command, projectDir }, { signal: timedAbortSignal(30_000) })
+    .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 95_000 })),
+  parallel: payload => postJson('/api/octopus/parallel', payload, { signal: timedAbortSignal(30_000) })
+    .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 310_000 })),
+  job: jobId => getJson(`/api/octopus/jobs/${encodeURIComponent(jobId)}`),
+  jobs: () => getJson('/api/octopus/jobs'),
+  parallelStream: (payload, handlers = {}) => postEventStream('/api/octopus/parallel/stream', payload, { ...handlers, requireComplete: true, signal: timedAbortSignal(310_000) }),
   reset: sessionId => postJson('/api/reset', { sessionId }),
+};
+
+export const scanApi = {
+  scan: (projectDir) => postJson('/api/scan', { projectDir }),
+};
+
+export const eventsApi = {
+  recent: ({ category = '', sessionId = '', severity = '', sinceId = '', taskId = '', traceId = '', type = '', limit = 100 } = {}) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (sessionId) params.set('sessionId', sessionId);
+    if (severity) params.set('severity', severity);
+    if (type) params.set('type', type);
+    if (sinceId) params.set('sinceId', sinceId);
+    if (taskId) params.set('taskId', taskId);
+    if (traceId) params.set('traceId', traceId);
+    params.set('limit', String(limit));
+    return getJson(`/api/events?${params.toString()}`);
+  },
+  publish: ({ type, payload = {}, metadata = {} }) => postJson('/api/events/publish', { type, payload, metadata }),
+  streamUrl: ({ category = '', sessionId = '', severity = '', sinceId = '', taskId = '', traceId = '', type = '', replay = true } = {}) => {
+    const params = new URLSearchParams();
+    if (category) params.set('category', category);
+    if (sessionId) params.set('sessionId', sessionId);
+    if (severity) params.set('severity', severity);
+    if (sinceId) params.set('sinceId', sinceId);
+    if (taskId) params.set('taskId', taskId);
+    if (traceId) params.set('traceId', traceId);
+    if (type) params.set('type', type);
+    params.set('replay', replay ? '1' : '0');
+    return `${BACKEND}/api/events/stream?${params.toString()}`;
+  },
+};
+
+export const runtimeApi = {
+  tasks: ({ workflowId = '', status = '', type = '' } = {}) => {
+    const params = new URLSearchParams();
+    if (workflowId) params.set('workflowId', workflowId);
+    if (status) params.set('status', status);
+    if (type) params.set('type', type);
+    return getJson(`/api/runtime/tasks?${params.toString()}`);
+  },
+  schedule: task => postJson('/api/runtime/tasks', task),
+  run: taskId => postJson(`/api/runtime/tasks/${encodeURIComponent(taskId)}/run`, {}),
+  cancel: (taskId, reason = '') => postJson(`/api/runtime/tasks/${encodeURIComponent(taskId)}/cancel`, { reason }),
+  retry: taskId => postJson(`/api/runtime/tasks/${encodeURIComponent(taskId)}/retry`, {}),
+  graph: workflowId => getJson(`/api/runtime/graph/${encodeURIComponent(workflowId)}`),
+  tree: workflowId => getJson(`/api/runtime/tree/${encodeURIComponent(workflowId)}`),
+  trace: traceId => getJson(`/api/runtime/traces/${encodeURIComponent(traceId)}`),
+  replay: traceId => getJson(`/api/runtime/replay/${encodeURIComponent(traceId)}`),
+  replayV2: traceId => getJson(`/api/runtime/replay-v2/${encodeURIComponent(traceId)}`),
+  controlPlane: () => getJson('/api/runtime/control-plane'),
+  workers: () => getJson('/api/runtime/workers'),
+  metrics: () => getJson('/api/runtime/metrics'),
 };

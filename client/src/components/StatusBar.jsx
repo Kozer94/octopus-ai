@@ -1,3 +1,5 @@
+import { bidiIsolateStyle, codeTextStyle } from '../utils/bidiText';
+
 export function StatusBar({
   currentFile,
   displayFilePath,
@@ -25,17 +27,17 @@ export function StatusBar({
         {isRunning ? 'Stop' : 'Run'}
       </button>
       {runProcess && (
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.72)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span dir="ltr" style={codeTextStyle({ fontSize: 11, color: 'rgba(255,255,255,0.72)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
           {runProcess}
         </span>
       )}
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>🐙 Octopus AI</span>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🐙 Octopus AI</span>
       <div style={{ flex: 1 }} />
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
+      <span dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 })}>
         {displayFilePath(currentFile)} • {currentFile?.content?.split('\n').length || 0} lines
       </span>
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>UTF-8</span>
-      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }} onClick={onThemeClick}>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>UTF-8</span>
+      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.8)', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} onClick={onThemeClick}>
         {t.name}
       </span>
     </div>

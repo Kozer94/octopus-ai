@@ -32,13 +32,26 @@ export function OctopusWorking({ active, legs }) {
             0%, 100% { opacity: 0.3; }
             50% { opacity: 1; }
           }
+          .octopusWorkingRoot {
+            will-change: transform;
+          }
+          .octopusWorkingAnimated {
+            will-change: transform, opacity;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .octopusWorkingAnimated,
+            [data-respects-reduced-motion] {
+              animation: none !important;
+              transition: none !important;
+            }
+          }
         `}</style>
 
-        <svg width="120" height="120" viewBox="0 0 120 120" style={{ animation: 'octopusBob 1.2s ease-in-out infinite' }}>
+        <svg className="octopusWorkingAnimated octopusWorkingRoot" width="120" height="120" viewBox="0 0 120 120" style={{ animation: 'octopusBob 1.2s ease-in-out infinite' }}>
           <ellipse cx="60" cy="45" rx="32" ry="28" fill="#ff6b2b" />
           <ellipse cx="60" cy="34" rx="28" ry="24" fill="#ff8c42" />
           <ellipse cx="60" cy="42" rx="20" ry="14" fill="#e85520" opacity="0.4" />
-          <g style={{ animation: 'octopusBlink 3s infinite', transformOrigin: '60px 30px' }}>
+          <g className="octopusWorkingAnimated" style={{ animation: 'octopusBlink 3s infinite', transformOrigin: '60px 30px' }}>
             <circle cx="49" cy="30" r="7" fill="white" />
             <circle cx="71" cy="30" r="7" fill="white" />
             <circle cx="50.5" cy="31.5" r="4.5" fill="#1a0a00" />
@@ -55,7 +68,7 @@ export function OctopusWorking({ active, legs }) {
             const delay = i * 0.15;
             const curve = i % 2 === 0 ? -6 : 6;
             return (
-              <g key={i} style={{ transformOrigin: `${x}px 65px`, animation: `${i % 2 === 0 ? 'tentacle1' : 'tentacle2'} ${0.7 + i * 0.08}s ease-in-out infinite`, animationDelay: `${delay}s` }}>
+              <g key={i} className="octopusWorkingAnimated" style={{ transformOrigin: `${x}px 65px`, animation: `${i % 2 === 0 ? 'tentacle1' : 'tentacle2'} ${0.7 + i * 0.08}s ease-in-out infinite`, animationDelay: `${delay}s` }}>
                 <path d={`M${x} 65 Q${x + curve} 82 ${x + curve * 0.5} 100`} stroke="#ff6b2b" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.9" />
                 <path d={`M${x} 65 Q${x + curve} 82 ${x + curve * 0.5} 100`} stroke="#ff8c42" strokeWidth="2.5" fill="none" strokeLinecap="round" opacity="0.5" />
               </g>
@@ -70,15 +83,15 @@ export function OctopusWorking({ active, legs }) {
         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#f0883e', animation: 'octopusTyping 0.8s infinite' }} />
+          <div data-respects-reduced-motion className="octopusWorkingAnimated" style={{ width: 8, height: 8, borderRadius: '50%', background: '#f0883e', animation: 'octopusTyping 0.8s infinite' }} />
           <span style={{ fontSize: 12, color: '#7dd3fc', fontWeight: 500 }}>Octopus working...</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {workingLegs.map((leg, i) => (
             <div key={leg.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f0883e', animation: `octopusTyping ${0.6 + i * 0.2}s infinite`, animationDelay: `${i * 0.1}s`, flexShrink: 0 }} />
-              <span style={{ fontSize: 11, color: '#8b949e' }}>{leg.name}:</span>
-              <span style={{ fontSize: 11, color: '#c9d1d9', fontFamily: 'monospace' }}>{leg.task}</span>
+              <div data-respects-reduced-motion className="octopusWorkingAnimated" style={{ width: 6, height: 6, borderRadius: '50%', background: '#f0883e', animation: `octopusTyping ${0.6 + i * 0.2}s infinite`, animationDelay: `${i * 0.1}s`, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: '#8b949e', flexShrink: 0 }}>{leg.name}:</span>
+              <span style={{ fontSize: 11, color: '#c9d1d9', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{leg.task}</span>
             </div>
           ))}
         </div>

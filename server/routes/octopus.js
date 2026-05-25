@@ -1,4 +1,5 @@
 const path = require('path');
+const { withTimeout } = require('../services/asyncControl');
 
 function registerOctopusRoutes(app, {
   aiLimiter,
@@ -6,6 +7,7 @@ function registerOctopusRoutes(app, {
   executeHook,
   getProjectContextForTask,
   isReportCommand,
+  jobQueue,
   previewBrainController,
   runBrainController,
   saveTaggedFiles,
@@ -13,9 +15,79 @@ function registerOctopusRoutes(app, {
   systemPrompt,
   validateProjectBinding,
 }) {
+  function sendQueued(res, job) {
+    return res.status(202).json({
+      success: true,
+      queued: true,
+      jobId: job.id,
+      job,
+    });
+  }
+
+  function formatSavedFile(f, projectDir) {
+    return {
+      name: path.basename(f.path),
+      path: f.absolutePath || path.resolve(projectDir || process.cwd(), f.path),
+      relativePath: f.path,
+      size: f.size,
+      ...(Object.prototype.hasOwnProperty.call(f, 'oldContent') ? { oldContent: f.oldContent } : {}),
+      ...(Object.prototype.hasOwnProperty.call(f, 'newContent') ? { newContent: f.newContent } : {}),
+      ...(Object.prototype.hasOwnProperty.call(f, 'diff') ? { diff: f.diff } : {}),
+    };
+  }
+
+  function formatParallelResult(result, projectDir, sessionId) {
+    return {
+      success: true,
+      result: result.finalResult,
+      mode: result.mode,
+      plan: result.plan,
+      legResults: result.legResults.map(r => ({
+        leg: r.legId,
+        task: result.plan?.tasks?.find(t => t.leg === r.legId)?.task || '',
+        result: r.result,
+        error: r.error,
+      })),
+      savedFiles: result.savedFiles.map(f => formatSavedFile(f, projectDir)),
+      rejectedFiles: result.rejectedFiles,
+      terminalCommands: result.terminalCommands,
+      terminalCommand: result.terminalCommands?.[0] || null,
+      timeline: result.timeline,
+      sessionId,
+    };
+  }
+
+  function storeSessionResult(sessionId, command, response) {
+    if (!sessions[sessionId]) sessions[sessionId] = [];
+    sessions[sessionId].push({ role: 'user', content: command });
+    sessions[sessionId].push({ role: 'assistant', content: response });
+    if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
+  }
+
+  app.get('/api/octopus/jobs/:jobId', aiLimiter, (req, res) => {
+    const job = jobQueue.get(req.params.jobId);
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+    return res.json({ success: true, job });
+  });
+
+  app.get('/api/octopus/jobs', aiLimiter, (req, res) => {
+    res.json({
+      success: true,
+      jobs: jobQueue.list(req.query),
+      queue: jobQueue.getState(),
+    });
+  });
+
+  app.post('/api/octopus/jobs/:jobId/cancel', aiLimiter, (req, res) => {
+    const job = jobQueue.cancel(req.params.jobId, req.body?.reason || 'cancelled');
+    if (!job) return res.status(404).json({ success: false, error: 'Job not found' });
+    return res.json({ success: true, job });
+  });
+
   app.post('/api/octopus', aiLimiter, async (req, res) => {
     try {
-      const { command, sessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '' } = req.body;
+      const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '' } = req.body;
+      const sessionId = (typeof rawSessionId === 'string' ? rawSessionId : 'default').slice(0, 128).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'default';
       const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: '' };
       if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
 
@@ -27,71 +99,142 @@ function registerOctopusRoutes(app, {
         });
       }
 
-      if (!sessions[sessionId]) {
-        sessions[sessionId] = [];
-      }
+      const job = jobQueue.enqueue('octopus.chat', async () => {
+        if (!sessions[sessionId]) sessions[sessionId] = [];
+        const projectMapContext = binding.projectRoot
+          ? getProjectContextForTask(binding.projectRoot, command, activeFile, activeFileContent)
+          : '';
 
-      const projectMapContext = binding.projectRoot
-        ? getProjectContextForTask(binding.projectRoot, command, activeFile, activeFileContent)
-        : '';
+        let fullCommand = projectMapContext
+          ? `خريطة المشروع والسياق الذكي:\n${projectMapContext}\n\nطلب المستخدم: ${command}`
+          : projectContext
+          ? `ملفات المشروع المفتوحة:\n${projectContext}\n\nالملف الحالي: ${activeFile}\n\nطلب المستخدم: ${command}`
+          : activeFileContent
+            ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\nطلب المستخدم: ${command}`
+            : command;
 
-      let fullCommand = projectMapContext
-        ? `خريطة المشروع والسياق الذكي:\n${projectMapContext}\n\nطلب المستخدم: ${command}`
-        : projectContext
-        ? `ملفات المشروع المفتوحة:\n${projectContext}\n\nالملف الحالي: ${activeFile}\n\nطلب المستخدم: ${command}`
-        : activeFileContent
-          ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\nطلب المستخدم: ${command}`
-          : command;
+        fullCommand = await executeHook('beforeSend', fullCommand);
+        if (typeof fullCommand !== 'string') fullCommand = String(fullCommand);
+        fullCommand = fullCommand.slice(0, 8000);
 
-      fullCommand = await executeHook('beforeSend', fullCommand);
+        sessions[sessionId].push({ role: 'user', content: fullCommand });
+        if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
 
-      sessions[sessionId].push({ role: 'user', content: fullCommand });
+        let response = await callAI([
+          { role: 'system', content: systemPrompt },
+          ...sessions[sessionId],
+        ], 100000, command);
 
-      if (sessions[sessionId].length > 20) {
-        sessions[sessionId] = sessions[sessionId].slice(-20);
-      }
+        response = await executeHook('afterResponse', response);
+        const savedFiles = await saveTaggedFiles(response, binding.projectRoot || projectDir);
+        sessions[sessionId].push({ role: 'assistant', content: response });
+        return { success: true, result: response, sessionId, savedFiles };
+      }, { sessionId });
 
-      let response = await callAI([
-        { role: 'system', content: systemPrompt },
-        ...sessions[sessionId]
-      ], 100000, command);
-
-      response = await executeHook('afterResponse', response);
-
-      const savedFiles = await saveTaggedFiles(response, binding.projectRoot || projectDir);
-
-      sessions[sessionId].push({ role: 'assistant', content: response });
-
-      res.json({ success: true, result: response, sessionId, savedFiles });
+      return sendQueued(res, job);
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
   });
 
+  const PREVIEW_TIMEOUT_MS  = 90_000;        // 90s — 3 AI calls × max 30s each
+  const PARALLEL_TIMEOUT_MS = 5 * 60_000;    // 5 min — up to 8 legs in parallel
+
+  function withRouteTimeout(promise, ms, label) {
+    return withTimeout(
+      () => promise,
+      ms,
+      label,
+      () => Object.assign(new Error(`${label}: انتهت المهلة (${ms / 1000}s)`), { statusCode: 504 }),
+    );
+  }
+
   app.post('/api/octopus/preview', aiLimiter, async (req, res) => {
     try {
-      const { command, projectDir = '' } = req.body;
+      const {
+        command,
+        projectDir = '',
+        activeFile = '',
+        activeFileContent = ''
+      } = req.body;
       if (!command) return res.status(400).json({ success: false, error: 'command is required' });
 
-      const preview = await previewBrainController({ command, projectDir, callAI });
+      const job = jobQueue.enqueue('octopus.preview', async () => {
+        const preview = await withRouteTimeout(
+          previewBrainController({ command, projectDir, activeFile, activeFileContent, callAI }),
+          PREVIEW_TIMEOUT_MS,
+          'Preview',
+        );
 
-      res.json({
-        success: true,
-        mode: preview.mode,
-        plan: preview.plan,
-        eng1Result: preview.eng1Result,
-        eng2Result: preview.eng2Result,
-        frameworks: preview.snapshot?.frameworks,
-        preview: `## Brain Decision\n${preview.plan.decision}\n\n## Rejected\n${preview.plan.rejected || 'None'}\n\n## Tasks\n${
-          preview.plan.tasks?.filter(t => t.active).map(t => `- Leg ${t.leg}: ${t.task}`).join('\n') || ''
-        }`,
+        return {
+          success: true,
+          mode: preview.mode,
+          plan: preview.plan,
+          eng1Result: preview.eng1Result,
+          eng2Result: preview.eng2Result,
+          frameworks: preview.snapshot?.frameworks,
+          preview: `## Brain Decision\n${preview.plan.decision}\n\n## Rejected\n${preview.plan.rejected || 'None'}\n\n## Tasks\n${
+            preview.plan.tasks?.filter(t => t.active).map(t => `- Leg ${t.leg}: ${t.task}`).join('\n') || ''
+          }`,
+        };
       });
+
+      return sendQueued(res, job);
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: error.message });
     }
   });
 
   app.post('/api/octopus/parallel', aiLimiter, async (req, res) => {
+    try {
+      const {
+        command,
+        projectDir = '',
+        activeFile = '',
+        activeFileContent = '',
+        confirmed = false,
+        sessionId = 'default',
+      } = req.body;
+
+      if (!confirmed) {
+        return res.status(400).json({
+          success: false,
+          error: 'Plan must be confirmed first. Use /api/octopus/preview then send confirmed: true',
+          requiresConfirmation: true,
+        });
+      }
+
+      const onUpdate = (entry) => {
+        const label = entry.legId === 0 ? '🧠 Brain' : `🦾 Leg ${entry.legId}`;
+        console.log(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
+      };
+
+      const job = jobQueue.enqueue('octopus.parallel', async () => {
+        const result = await withRouteTimeout(
+          runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate }),
+          PARALLEL_TIMEOUT_MS,
+          'Parallel execution',
+        );
+        storeSessionResult(sessionId, command, result.finalResult);
+        return formatParallelResult(result, projectDir, sessionId);
+      });
+
+      return sendQueued(res, job);
+    } catch (error) {
+      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/octopus/parallel/stream', aiLimiter, async (req, res) => {
+    let streamStarted = false;
+    let heartbeatId = null;
+
+    const sendEvent = (event, data) => {
+      if (!res.writableEnded) {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+    };
+
     try {
       const {
         command,
@@ -110,56 +253,40 @@ function registerOctopusRoutes(app, {
         });
       }
 
-      const updates = [];
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+      streamStarted = true;
+
+      // Heartbeat كل 15 ثانية لمنع inactivity timeout عند بطء providers
+      heartbeatId = setInterval(() => {
+        if (!res.writableEnded) res.write(': heartbeat\n\n');
+      }, 15_000);
+
       const onUpdate = (entry) => {
-        updates.push(entry);
+        sendEvent('leg_update', entry);
         const label = entry.legId === 0 ? '🧠 Brain' : `🦾 Leg ${entry.legId}`;
         console.log(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
       };
 
-      const result = await runBrainController({
-        command,
-        projectDir,
-        activeFile,
-        activeFileContent,
-        callAI,
-        onUpdate,
-      });
+      const result = await withRouteTimeout(
+        runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate }),
+        PARALLEL_TIMEOUT_MS,
+        'Parallel execution',
+      );
+      if (heartbeatId) clearInterval(heartbeatId);
 
-      if (!sessions[sessionId]) sessions[sessionId] = [];
-      sessions[sessionId].push({ role: 'user', content: command });
-      sessions[sessionId].push({ role: 'assistant', content: result.finalResult });
-      if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
-
-      res.json({
-        success: true,
-        result: result.finalResult,
-        mode: result.mode,
-        plan: result.plan,
-        legResults: result.legResults.map(r => ({
-          leg: r.legId,
-          task: result.plan?.tasks?.find(t => t.leg === r.legId)?.task || '',
-          result: r.result,
-          error: r.error,
-        })),
-        savedFiles: result.savedFiles.map(f => ({
-          name: path.basename(f.path),
-          path: f.absolutePath || path.resolve(projectDir || process.cwd(), f.path),
-          relativePath: f.path,
-          size: f.size,
-          ...(Object.prototype.hasOwnProperty.call(f, 'oldContent') ? { oldContent: f.oldContent } : {}),
-          ...(Object.prototype.hasOwnProperty.call(f, 'newContent') ? { newContent: f.newContent } : {}),
-          ...(Object.prototype.hasOwnProperty.call(f, 'diff') ? { diff: f.diff } : {}),
-        })),
-        rejectedFiles: result.rejectedFiles,
-        terminalCommands: result.terminalCommands,
-        terminalCommand: result.terminalCommands?.[0] || null,
-        timeline: result.timeline,
-        sessionId,
-      });
-
+      storeSessionResult(sessionId, command, result.finalResult);
+      sendEvent('complete', formatParallelResult(result, projectDir, sessionId));
+      res.end();
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      if (heartbeatId) clearInterval(heartbeatId);
+      if (!streamStarted) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      sendEvent('error', { success: false, error: error.message, message: error.message });
+      res.end();
     }
   });
 }

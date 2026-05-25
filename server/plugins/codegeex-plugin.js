@@ -1,4 +1,5 @@
 const BasePlugin = require('./basePlugin');
+const { createEnvReader } = require('../services/envService');
 
 class CodeGeeXPlugin extends BasePlugin {
   constructor() {
@@ -26,7 +27,7 @@ class CodeGeeXPlugin extends BasePlugin {
   }
 
   async callCodeGeeX(messages, maxTokens) {
-    const apiKey = process.env.CODEGEEX_API_KEY;
+    const apiKey = createEnvReader().get('CODEGEEX_API_KEY');
     if (!apiKey) {
       throw new Error('no key');
     }

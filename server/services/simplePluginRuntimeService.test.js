@@ -35,6 +35,8 @@ test('shouldLoadSimplePluginFile filters non-simple plugin files', () => {
   assert.equal(shouldLoadSimplePluginFile('hello.js'), true);
   assert.equal(shouldLoadSimplePluginFile('pluginManager.js'), false);
   assert.equal(shouldLoadSimplePluginFile('basePlugin.js'), false);
+  assert.equal(shouldLoadSimplePluginFile('auto-save.js'), true);
+  assert.equal(shouldLoadSimplePluginFile('project-stats.js'), true);
   assert.equal(shouldLoadSimplePluginFile('my-plugin.js'), false);
   assert.equal(shouldLoadSimplePluginFile('README.md'), false);
 });
@@ -47,7 +49,7 @@ test('createSimplePluginRuntime loads plugins, applies saved state, and register
       id: 'sample',
       name: 'Sample',
       enabled: false,
-      routes: [{ method: 'GET', path: '/sample', handler: async (_req, res) => res.json({ ok: true }) }],
+      routes: [{ method: 'GET', path: '/api/plugins/sample', handler: async (_req, res) => res.json({ ok: true }) }],
       hooks: { afterResponse: async value => value + '!' },
     };
   `, 'utf8');
@@ -68,7 +70,7 @@ test('createSimplePluginRuntime loads plugins, applies saved state, and register
 
   assert.equal(loadedPlugins.length, 1);
   assert.equal(loadedPlugins[0].enabled, true);
-  assert.deepEqual(app.routes.map(route => `${route.method} ${route.routePath}`), ['GET /sample']);
+  assert.deepEqual(app.routes.map(route => `${route.method} ${route.routePath}`), ['GET /api/plugins/sample']);
   assert.equal(runtime.getEnabledPlugins().length, 1);
 });
 

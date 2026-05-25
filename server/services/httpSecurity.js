@@ -4,8 +4,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5174',
   'http://127.0.0.1:5174',
 ];
+const { createEnvReader } = require('./envService');
 
-function getAllowedOrigins(extraOrigins = process.env.ALLOWED_ORIGINS || '') {
+function getAllowedOrigins(extraOrigins = createEnvReader().get('ALLOWED_ORIGINS')) {
   return new Set([
     ...DEFAULT_ALLOWED_ORIGINS,
     ...String(extraOrigins)

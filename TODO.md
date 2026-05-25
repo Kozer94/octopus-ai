@@ -5,6 +5,13 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-25 21:30:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` - إضافة WebSocket reconnection مع exponential backoff (max 5 attempts) لحل مشكلة فقدان الاتصال
+- [2026-05-25 21:35:00 UTC] system:fix `client/src/hooks/useOctopusWorkflow.js` - إضافة chunked AI response streaming لمنع تجميد UI مع استجابات طويلة
+- [2026-05-25 21:40:00 UTC] system:fix `client/src/components/ErrorBoundary.jsx` و`client/src/main.jsx` - إضافة Error Boundary wrapper لمنع crashes شاملة للتطبيق
+- [2026-05-25 21:45:00 UTC] system:fix `client/src/hooks/useResizableLayout.js` - إضافة responsive breakpoints (1024px) للـ panels للتكيف مع الشاشات الصغيرة
+- [2026-05-25 21:50:00 UTC] system:fix `client/src/components/ExplorerPanel.jsx` - إصلاح memory leak في expandedPaths عند switch project
+- [2026-05-25 21:55:00 UTC] system:fix `client/src/hooks/useProjectWorkspace.js` و`client/src/components/EditorWorkspace.jsx` - إضافة loading state لقراءة الملفات مع spinner في التبويبات
+- [2026-05-25 22:00:00 UTC] system:fix `client/src/hooks/useOctopusWorkflow.js` - تحسين AI error messages لتكون user-friendly بدلاً من رسائل تقنية
 - [2026-05-25 00:00:00 UTC] system:create `server/services/todoLogService.js` - إضافة نظام تسجيل تحديثات تلقائي داخل TODO.md
 - [2026-05-25 00:00:00 UTC] system:update `server/index.js` - ربط حفظ/حذف/إعادة تسمية الملفات بسجل TODO التلقائي
 - [2026-05-25 00:00:00 UTC] system:create `AGENTS.md` - إضافة تعليمات للمساعدين لتحديث TODO.md بعد التغييرات اليدوية
@@ -79,6 +86,40 @@
 - [2026-05-25 00:00:00 UTC] system:docs `TERMINAL.md` - إضافة دليل أوامر التيرمنال والاختصارات والحدود والباقي لتطوير PTY/WebSocket
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل التيرمنال إلى xterm.js مع node-pty وWebSocket وaddon-fit لتجربة PTY حقيقية
 - [2026-05-25 00:00:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` - جعل Ctrl+C ينسخ النص المحدد داخل xterm وCtrl+V يلصق داخل جلسة PTY
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/eventBusService.js` - إضافة Event Bus مركزي مع history وSSE routes وAPI عميل واختبارات
+- [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TimelinePanel.jsx` - توحيد Event Taxonomy وإضافة Live Agent Timeline بفلاتر وتفاصيل قابلة للفتح
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/taskRuntimeService.js` - إضافة Runtime Task Engine بحالات تنفيذ وdependency graph وsnapshots وmetrics وevents
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/workerAdapterService.js` - إضافة Worker Runtime Isolation مع child-process adapter وRuntime Inspector وschemaVersion للعقود
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/workerRegistryService.js` - إضافة Worker Capability Registry وgovernance budgets وexecution tree/trace viewer للـ Runtime Inspector
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/executionControlService.js` - إضافة Execution Control Plane بعقود leases وconcurrency arbitration وreplay artifacts
+- [2026-05-25 00:00:00 UTC] system:feature `server/services/runtimeReconstructionService.js` - إضافة Consistency Layer بترتيب أحداث sequence وevent log وstate reconstruction وreplay v2
+- [2026-05-25 00:00:00 UTC] system:docs `BRAIN_DECOMPOSITION_PLAN.md` - إضافة خطة migration لتفكيك brainController إلى Planner/DAG/Scheduler/Reducer بدون كسر المسار الحالي
+- [2026-05-25 00:00:00 UTC] system:fix `server/services/aiService.js` - إضافة provider timeout وتوحيد protected files وتحديث isReportCommand مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:feature `server/routes/octopus.js` - إضافة /api/octopus/parallel/stream كـ POST-SSE وربط تحديثات الأرجل الحية مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:fix `server/supervisor.js` - منع EADDRINUSE restart loop عبر اكتشاف خادم Octopus شغال مسبقاً قبل spawn مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:fix `client/src/hooks/useOctopusWorkflow.js` - تحديث حالات الأرجل فورياً من leg_update للحالات working/done/error مع نجاح npm run check
+- [2026-05-25 00:00:00 UTC] system:fix `client/src/App.jsx` و`server/brainController.js` - حماية تنسيق أرقام الفحص وتطبيع خطط preview لمنع crash/500 عند نقص بيانات الاستجابة
+- [2026-05-25 00:00:00 UTC] system:security `server/services/authService.js` - إضافة حماية X-Octopus-Token لكل /api مع limiter للطلبات المعدلة واستبدال exec في show-in-explorer
+- [2026-05-25 16:15:00 UTC] system:refactor `client/src/App.jsx` - بدء تفكيك App.jsx باستخراج runtime inspector وresize layout وleg progress hooks
+- [2026-05-25 16:25:00 UTC] system:refactor `client/src/App.jsx` - استخراج تشغيل التيرمنال وإدارة الإضافات إلى hooks مستقلة
+- [2026-05-25 16:35:00 UTC] system:refactor `client/src/App.jsx` - استخراج إدارة المشروع والبحث وGit إلى hooks مستقلة
+- [2026-05-25 16:45:00 UTC] system:refactor `client/src/App.jsx` - استخراج فحص المشروع وقبول diff إلى hooks مستقلة
+- [2026-05-25 16:55:00 UTC] system:refactor `client/src/App.jsx` - استخراج عناصر المينيوبار titleMenuItems إلى hook مستقل
+- [2026-05-25 17:05:00 UTC] system:refactor `server/services/taskRuntimeService.js` - استخراج ثوابت runtime وgraph/tree/metrics builders إلى modules مستقلة
+- [2026-05-25 17:15:00 UTC] system:refactor `server/services/taskRuntimeService.js` - استخراج persistence للـ snapshots/indexes/traces إلى module مستقل مع نجاح اختبار runtime المركز
+- [2026-05-25 17:30:00 UTC] system:security `server/services/authService.js` و`server/services/inputValidation.js` - تشديد Auth للـ API وإضافة request guard وتقييد أوامر shell وقراءة env عبر خدمة مركزية
+- [2026-05-25 17:45:00 UTC] system:performance `server/routes/events.js` و`server/routes/runtime.js` و`server/services/fileService.js` - إضافة حدود للـ payload وpagination وتحويل file APIs وworkspace search إلى async I/O
+- [2026-05-25 18:00:00 UTC] system:architecture `server/services/packageService.js` و`server/plugins/pluginManager.js` - استخراج منطق packages من routes وتوحيد تحميل plugins والـ worker registry
+- [2026-05-25 18:15:00 UTC] system:complexity `server/services/scanService.js` و`server/services/taskRuntimeService.js` و`client/src/App.jsx` - استخراج report generation وruntime lifecycle وApp shell لتقليل الدوال والملفات المتضخمة
+- [2026-05-25 18:30:00 UTC] system:duplication `server/services/aiService.js` و`server/services/diffService.js` و`server/services/asyncControl.js` - توحيد provider factories وتصنيف أخطاء providers ومنطق diff وtimeout helpers
+- [2026-05-25 18:45:00 UTC] system:scalability `server/services/jobQueueService.js` و`server/routes/octopus.js` و`server/services/rateLimitService.js` - إضافة job queue للـ Octopus APIs ومركزة rate limiting مع endpoint للحدود
+- [2026-05-25 19:00:00 UTC] system:fix `client/src/services/apiClient.js` و`client/src/hooks/useTerminalRunner.js` - منع Ghost State عند انقطاع streams عبر فشل صريح وتنظيف حالة الأرجل والتيرمنال
+- [2026-05-25 19:15:00 UTC] system:performance `client/src/hooks/useOctopusWorkflow.js` و`client/src/utils/legState.js` - تقليل Main Thread Stream Flooding عبر تجميع leg_update في frame واحد وتطبيق batch واحد
+- [2026-05-25 19:30:00 UTC] system:performance `client/src/components/ExplorerPanel.jsx` و`client/src/utils/fileTreeView.js` - إضافة windowing لشجرة الملفات لمنع تضخم DOM في المشاريع الكبيرة
+- [2026-05-25 19:45:00 UTC] system:i18n `client/src/utils/bidiText.js` وواجهات النص الحر - إصلاح عرض العربية/الإنجليزية المختلطة عبر dir=auto وunicode-bidi للنصوص والمسارات
+- [2026-05-25 20:00:00 UTC] system:feature `server/services/severityEngine.js` و`server/services/scanReportService.js` - إضافة Severity Engine بأبعاد exploitability/user impact/reproducibility/production risk/confidence
+- [2026-05-25 20:15:00 UTC] system:fix `client/src/components/EditorWorkspace.jsx` و`client/src/hooks/useResizableLayout.js` - معالجة أولويات إعادة الفحص: تبويبات قابلة للتمرير، banner فشل ثابت، وحماية عرض المحرر
+- [2026-05-25 20:45:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` و`client/src/config/uiConfig.js` - إغلاق الثغرات المتبقية: session/backend config، مفاتيح القوائم، modal escape، reduced motion، ومسارات ellipsis
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان

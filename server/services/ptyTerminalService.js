@@ -1,14 +1,15 @@
 const os = require('os');
 const pty = require('node-pty');
 const { WebSocketServer } = require('ws');
+const { createEnvReader } = require('./envService');
 const { resolveWorkingDirectory, buildSafeEnv } = require('./terminalService');
 
-function getDefaultShell() {
+function getDefaultShell(env = createEnvReader()) {
   if (process.platform === 'win32') {
-    return process.env.ComSpec || 'powershell.exe';
+    return env.get('ComSpec', 'powershell.exe');
   }
 
-  return process.env.SHELL || 'bash';
+  return env.get('SHELL', 'bash');
 }
 
 function parseJson(value, fallback = {}) {

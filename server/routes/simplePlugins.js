@@ -1,4 +1,5 @@
 const fs = require('fs');
+const fsp = require('fs/promises');
 const path = require('path');
 
 function registerPluginRoutes(app, plugin) {
@@ -75,7 +76,7 @@ function registerSimplePluginRoutes(app, {
     }
   });
 
-  app.post('/api/simple-plugins/install', (req, res) => {
+  app.post('/api/simple-plugins/install', async (req, res) => {
     try {
       const { plugin } = req.body;
       if (!plugin || !plugin.id || !plugin.name) {
@@ -85,7 +86,7 @@ function registerSimplePluginRoutes(app, {
       const pluginPath = path.join(pluginsDir, `${plugin.id}.js`);
       const pluginCode = `module.exports = ${JSON.stringify(plugin, null, 2)};`;
 
-      fs.writeFileSync(pluginPath, pluginCode, 'utf8');
+      await fsp.writeFile(pluginPath, pluginCode, 'utf8');
 
       const newPlugin = require(pluginPath);
       newPlugin.enabled = true;
@@ -101,7 +102,7 @@ function registerSimplePluginRoutes(app, {
     }
   });
 
-  app.delete('/api/simple-plugins/:id', (req, res) => {
+  app.delete('/api/simple-plugins/:id', async (req, res) => {
     try {
       const pluginIndex = loadedPlugins.findIndex(p => p.id === req.params.id);
       if (pluginIndex === -1) {
@@ -112,7 +113,7 @@ function registerSimplePluginRoutes(app, {
       const pluginPath = path.join(pluginsDir, `${plugin.id}.js`);
 
       if (fs.existsSync(pluginPath)) {
-        fs.unlinkSync(pluginPath);
+        await fsp.unlink(pluginPath);
       }
 
       loadedPlugins.splice(pluginIndex, 1);

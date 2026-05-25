@@ -24,5 +24,5 @@ export function TypingCode() {
     return () => clearTimeout(timer);
   }, [idx, snippetIdx]);
 
-  return <span>{text}<span style={{ animation: 'octopusTyping 0.5s infinite', opacity: 0.8 }}>|</span></span>;
+  return <span>{text}<span data-respects-reduced-motion style={{ animation: 'octopusTyping 0.5s infinite', opacity: 0.8 }}>|</span></span>;
 }
