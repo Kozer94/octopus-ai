@@ -677,9 +677,11 @@ export default function App() {
 
           {terminalOpen && (
             <TerminalPanel
+              isRunning={isRunning}
               onClear={() => setTerminalHistory([TERMINAL_READY_ENTRY])}
               onClose={() => setTerminalOpen(false)}
               onCommandChange={setTerminalInput}
+              onInterrupt={stopProject}
               onRunCommand={runCommand}
               onResizeStart={startTerminalResize}
               onTabChange={setTerminalTab}

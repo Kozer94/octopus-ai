@@ -73,6 +73,7 @@
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/RightPanel.jsx` - إضافة resize للوحة الأخطبوط/right panel بعرض 220-520px مع نجاح npm run check
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/App.jsx` - تطوير أقسام المينيوبار File/Edit/View/Run/Help بأوامر حفظ وإغلاق ولوحات وتشغيل ومساعدة مع نجاح npm run check
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل روابط مخرجات التيرمنال مثل localhost إلى روابط قابلة للنقر مع اختبار splitTerminalLinks
+- [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تطوير التيرمنال بدعم Ctrl+C وCtrl+L وتاريخ الأوامر وقائمة كليك يمين للنسخ واللصق والتنظيف
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان
