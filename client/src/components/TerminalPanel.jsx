@@ -164,25 +164,33 @@ export function TerminalPanel({
           <i className="codicon codicon-close" style={{ fontSize: 14 }} />
         </button>
       </div>
-      <div onContextMenu={showContextMenu} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: t.bg, fontFamily: 'JetBrains Mono, Consolas, monospace', userSelect: 'text' }}>
+      <div
+        onClick={() => inputRef.current?.focus()}
+        onContextMenu={showContextMenu}
+        style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: t.bg, fontFamily: 'JetBrains Mono, Consolas, monospace', userSelect: 'text', cursor: 'text' }}
+      >
         {terminalTab === 'terminal' && terminalHistory.map((historyItem, i) => (
           <div key={i} style={{ fontSize: 12, color: historyItem.type === 'input' ? t.accent : historyItem.type === 'error' ? '#ff7b72' : historyItem.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{renderTerminalText(historyItem.text)}</div>
         ))}
+        {terminalTab === 'terminal' && (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 22, fontSize: 12, lineHeight: 1.6, color: t.text }}>
+            <span style={{ color: t.accent, flexShrink: 0 }}>$</span>
+            <input
+              ref={inputRef}
+              aria-label="Terminal command"
+              style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: t.text, caretColor: t.accent, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, lineHeight: 1.6, padding: 0 }}
+              value={terminalInput}
+              onChange={e => onCommandChange(e.target.value)}
+              onClick={event => event.stopPropagation()}
+              onKeyDown={handleKeyDown}
+              dir="ltr"
+              spellCheck={false}
+            />
+          </div>
+        )}
         {terminalTab === 'problems' && <p style={{ fontSize: 12, color: t.textMuted }}>No problems</p>}
         {terminalTab === 'output' && <p style={{ fontSize: 12, color: t.textMuted }}>No output</p>}
         <div ref={terminalBottomRef} />
-      </div>
-      <div onContextMenu={showContextMenu} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
-        <span style={{ color: t.accent, fontFamily: 'monospace', fontSize: 13 }}>$</span>
-        <input
-          ref={inputRef}
-          style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: t.text, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12 }}
-          value={terminalInput}
-          onChange={e => onCommandChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Enter command..."
-          dir="ltr"
-        />
       </div>
       {contextMenu && (
         <div

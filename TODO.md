@@ -74,6 +74,7 @@
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/App.jsx` - تطوير أقسام المينيوبار File/Edit/View/Run/Help بأوامر حفظ وإغلاق ولوحات وتشغيل ومساعدة مع نجاح npm run check
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل روابط مخرجات التيرمنال مثل localhost إلى روابط قابلة للنقر مع اختبار splitTerminalLinks
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تطوير التيرمنال بدعم Ctrl+C وCtrl+L وتاريخ الأوامر وقائمة كليك يمين للنسخ واللصق والتنظيف
+- [2026-05-25 00:00:00 UTC] system:ui `client/src/components/TerminalPanel.jsx` - إزالة شريط Enter command المنفصل ونقل إدخال الأوامر إلى prompt داخل مساحة التيرمنال نفسها
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان
