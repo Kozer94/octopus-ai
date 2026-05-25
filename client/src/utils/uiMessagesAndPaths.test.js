@@ -9,6 +9,7 @@ import {
   userMessage,
 } from './chatMessages.js';
 import { displayFilePath } from './pathDisplay.js';
+import { splitTerminalLinks } from './terminalLinks.js';
 import {
   TERMINAL_READY_ENTRY,
   terminalApprovalEntry,
@@ -41,6 +42,16 @@ test('terminal history helpers preserve entry types', () => {
   assert.deepEqual(terminalRunEntry('npm run dev'), { type: 'system', text: '🚀 Running: npm run dev' });
   assert.deepEqual(terminalApprovalEntry('npm test'), { type: 'system', text: 'Approval required: npm test' });
   assert.deepEqual(terminalSkippedEntry('npm test'), { type: 'system', text: 'Skipped: npm test' });
+});
+
+test('splitTerminalLinks extracts clickable urls from terminal text', () => {
+  assert.deepEqual(splitTerminalLinks('Local: http://localhost:4028.'), [
+    { type: 'text', value: 'Local: ' },
+    { type: 'link', value: 'http://localhost:4028' },
+    { type: 'text', value: '.' },
+  ]);
+
+  assert.deepEqual(splitTerminalLinks('no url'), [{ type: 'text', value: 'no url' }]);
 });
 
 test('displayFilePath normalizes project-relative paths', () => {

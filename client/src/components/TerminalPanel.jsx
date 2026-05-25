@@ -1,3 +1,5 @@
+import { splitTerminalLinks } from '../utils/terminalLinks';
+
 export function TerminalPanel({
   onClear,
   onClose,
@@ -12,6 +14,22 @@ export function TerminalPanel({
   terminalInput,
   terminalTab,
 }) {
+  const renderTerminalText = (text) => splitTerminalLinks(text).map((part, index) => {
+    if (part.type !== 'link') return part.value;
+
+    return (
+      <a
+        key={`${part.value}-${index}`}
+        href={part.value}
+        target="_blank"
+        rel="noreferrer"
+        style={{ color: t.accent, textDecoration: 'underline', textUnderlineOffset: 2 }}
+      >
+        {part.value}
+      </a>
+    );
+  });
+
   return (
     <div style={{ height: terminalHeight, borderTop: `0.5px solid ${t.border}`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
       <div style={{ height: 3, cursor: 'row-resize', background: 'transparent' }}
@@ -36,7 +54,7 @@ export function TerminalPanel({
       </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', background: t.bg, fontFamily: 'JetBrains Mono, Consolas, monospace' }}>
         {terminalTab === 'terminal' && terminalHistory.map((historyItem, i) => (
-          <div key={i} style={{ fontSize: 12, color: historyItem.type === 'input' ? t.accent : historyItem.type === 'error' ? '#ff7b72' : historyItem.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{historyItem.text}</div>
+          <div key={i} style={{ fontSize: 12, color: historyItem.type === 'input' ? t.accent : historyItem.type === 'error' ? '#ff7b72' : historyItem.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{renderTerminalText(historyItem.text)}</div>
         ))}
         {terminalTab === 'problems' && <p style={{ fontSize: 12, color: t.textMuted }}>No problems</p>}
         {terminalTab === 'output' && <p style={{ fontSize: 12, color: t.textMuted }}>No output</p>}
