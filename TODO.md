@@ -78,6 +78,7 @@
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - إكمال مرحلة التيرمنال بإخراج حي streaming وإيقاف الأمر الجاري وprompt متعدد الأسطر وحالة Running/Idle
 - [2026-05-25 00:00:00 UTC] system:docs `TERMINAL.md` - إضافة دليل أوامر التيرمنال والاختصارات والحدود والباقي لتطوير PTY/WebSocket
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل التيرمنال إلى xterm.js مع node-pty وWebSocket وaddon-fit لتجربة PTY حقيقية
+- [2026-05-25 00:00:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` - جعل Ctrl+C ينسخ النص المحدد داخل xterm وCtrl+V يلصق داخل جلسة PTY
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان

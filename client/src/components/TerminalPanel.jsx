@@ -68,6 +68,28 @@ export function TerminalPanel({
 
     terminal.loadAddon(fitAddon);
     terminal.open(containerRef.current);
+    terminal.attachCustomKeyEventHandler((event) => {
+      const key = event.key.toLowerCase();
+
+      if ((event.ctrlKey || event.metaKey) && key === 'c' && terminal.hasSelection()) {
+        navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
+        terminal.clearSelection();
+        return false;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && key === 'v') {
+        navigator.clipboard?.readText?.()
+          .then(text => {
+            if (text && socketRef.current?.readyState === WebSocket.OPEN) {
+              socketRef.current.send(JSON.stringify({ type: 'input', data: text }));
+            }
+          })
+          .catch(() => {});
+        return false;
+      }
+
+      return true;
+    });
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
