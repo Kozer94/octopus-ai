@@ -1,10 +1,12 @@
 const {
   runCommand,
   spawnCommand,
+  terminateProcess,
 } = require('../services/terminalService');
 
 function registerTerminalRoutes(app) {
   let runningProcess = null;
+  let terminalProcess = null;
 
   app.post('/api/terminal', async (req, res) => {
     try {
@@ -19,7 +21,14 @@ function registerTerminalRoutes(app) {
   app.post('/api/terminal/stream', async (req, res) => {
     try {
       const { command, cwd } = req.body;
+      if (terminalProcess) {
+        terminateProcess(terminalProcess);
+        terminalProcess = null;
+      }
+
       const proc = spawnCommand(command, cwd);
+      terminalProcess = proc;
+      let finished = false;
 
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
@@ -37,22 +46,45 @@ function registerTerminalRoutes(app) {
       });
 
       proc.on('close', (code) => {
+        finished = true;
+        if (terminalProcess === proc) terminalProcess = null;
         try {
-          res.write(`data: ${JSON.stringify({ done: true, code: code || 0 })}\n\n`);
+          res.write(`data: ${JSON.stringify({ done: true, code: code ?? 0 })}\n\n`);
           res.end();
         } catch { }
       });
 
       proc.on('error', (err) => {
+        finished = true;
+        if (terminalProcess === proc) terminalProcess = null;
         try {
           res.write(`data: ${JSON.stringify({ output: err.message, done: true, code: 1 })}\n\n`);
           res.end();
         } catch { }
       });
 
-      req.on('close', () => proc.kill());
+      req.on('close', () => {
+        if (!finished) {
+          terminateProcess(proc);
+          if (terminalProcess === proc) terminalProcess = null;
+        }
+      });
     } catch (error) {
       res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/terminal/interrupt', async (_req, res) => {
+    try {
+      if (terminalProcess) {
+        terminateProcess(terminalProcess);
+        terminalProcess = null;
+        res.json({ success: true, output: 'Interrupted terminal command' });
+      } else {
+        res.json({ success: true, output: 'No terminal command is running' });
+      }
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 
@@ -61,7 +93,7 @@ function registerTerminalRoutes(app) {
       const { command, cwd } = req.body;
 
       if (runningProcess) {
-        runningProcess.kill('SIGTERM');
+        terminateProcess(runningProcess);
         runningProcess = null;
       }
 
@@ -84,7 +116,7 @@ function registerTerminalRoutes(app) {
   app.post('/api/stop', async (_req, res) => {
     try {
       if (runningProcess) {
-        runningProcess.kill('SIGTERM');
+        terminateProcess(runningProcess);
         runningProcess = null;
         res.json({ success: true, output: '⏹ تم الإيقاف' });
       } else {

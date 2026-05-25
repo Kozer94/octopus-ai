@@ -12,13 +12,17 @@ import { displayFilePath } from './pathDisplay.js';
 import { splitTerminalLinks } from './terminalLinks.js';
 import {
   TERMINAL_READY_ENTRY,
+  appendTerminalOutputChunk,
+  finishTerminalStream,
   terminalApprovalEntry,
   terminalErrorEntry,
+  terminalExitEntry,
   terminalInputEntry,
   terminalOutputEntry,
   terminalResultEntry,
   terminalRunEntry,
   terminalSkippedEntry,
+  terminalStreamingEntry,
   terminalSystemEntry,
 } from './terminalHistory.js';
 
@@ -38,10 +42,22 @@ test('terminal history helpers preserve entry types', () => {
   assert.deepEqual(terminalResultEntry({ success: false, error: 'bad' }), { type: 'error', text: 'bad' });
   assert.deepEqual(terminalOutputEntry('stdout'), { type: 'output', text: 'stdout' });
   assert.deepEqual(terminalSystemEntry('system'), { type: 'system', text: 'system' });
+  assert.deepEqual(terminalStreamingEntry(), { type: 'output', text: '', streaming: true });
   assert.deepEqual(terminalErrorEntry('bad'), { type: 'error', text: '⚠️ bad' });
   assert.deepEqual(terminalRunEntry('npm run dev'), { type: 'system', text: '🚀 Running: npm run dev' });
   assert.deepEqual(terminalApprovalEntry('npm test'), { type: 'system', text: 'Approval required: npm test' });
   assert.deepEqual(terminalSkippedEntry('npm test'), { type: 'system', text: 'Skipped: npm test' });
+  assert.deepEqual(terminalExitEntry(0), { type: 'system', text: 'Process exited with code 0' });
+});
+
+test('terminal stream helpers append chunks to the active output entry', () => {
+  const history = appendTerminalOutputChunk([TERMINAL_READY_ENTRY], 'one');
+  assert.deepEqual(history.at(-1), { type: 'output', text: 'one', streaming: true });
+
+  const updated = appendTerminalOutputChunk(history, ' two');
+  assert.deepEqual(updated.at(-1), { type: 'output', text: 'one two', streaming: true });
+
+  assert.deepEqual(finishTerminalStream(updated).at(-1), { type: 'output', text: 'one two' });
 });
 
 test('splitTerminalLinks extracts clickable urls from terminal text', () => {

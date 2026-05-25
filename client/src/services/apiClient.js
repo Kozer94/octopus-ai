@@ -20,6 +20,43 @@ export async function getJson(path) {
   return parseJsonResponse(response);
 }
 
+export async function postEventStream(path, body, { onMessage, signal } = {}) {
+  const response = await fetch(`${BACKEND}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+
+  if (!response.ok || !response.body) {
+    const data = await parseJsonResponse(response).catch(() => ({}));
+    throw new Error(data.error || `Request failed with ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+
+    for (const event of events) {
+      const line = event.split('\n').find(item => item.startsWith('data: '));
+      if (!line) continue;
+      onMessage?.(JSON.parse(line.slice(6)));
+    }
+  }
+
+  if (buffer.trim().startsWith('data: ')) {
+    onMessage?.(JSON.parse(buffer.trim().slice(6)));
+  }
+}
+
 export const filesApi = {
   list: dirPath => postJson('/api/files/list', { dirPath }),
   read: ({ filePath, projectDir }) => postJson('/api/files/read', { filePath, projectDir }),
@@ -44,7 +81,9 @@ export const extensionsApi = {
 
 export const terminalApi = {
   command: ({ command, cwd, signal }) => postJson('/api/terminal', { command, cwd }, { signal }),
+  interrupt: () => postJson('/api/terminal/interrupt', {}),
   run: ({ command, cwd }) => postJson('/api/run', { command, cwd }),
+  stream: ({ command, cwd, onMessage, signal }) => postEventStream('/api/terminal/stream', { command, cwd }, { onMessage, signal }),
   stop: () => postJson('/api/stop', {}),
 };
 

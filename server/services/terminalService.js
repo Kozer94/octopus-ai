@@ -92,9 +92,24 @@ function spawnCommand(command, cwd) {
   });
 }
 
+function terminateProcess(proc) {
+  if (!proc || proc.killed) return;
+
+  if (process.platform === 'win32' && proc.pid) {
+    spawn('taskkill', ['/pid', String(proc.pid), '/t', '/f'], {
+      windowsHide: true,
+      stdio: 'ignore',
+    });
+    return;
+  }
+
+  proc.kill('SIGTERM');
+}
+
 module.exports = {
   buildSafeEnv,
   runCommand,
   spawnCommand,
+  terminateProcess,
   validateCommand,
 };

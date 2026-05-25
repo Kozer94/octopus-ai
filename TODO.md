@@ -75,6 +75,7 @@
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تحويل روابط مخرجات التيرمنال مثل localhost إلى روابط قابلة للنقر مع اختبار splitTerminalLinks
 - [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - تطوير التيرمنال بدعم Ctrl+C وCtrl+L وتاريخ الأوامر وقائمة كليك يمين للنسخ واللصق والتنظيف
 - [2026-05-25 00:00:00 UTC] system:ui `client/src/components/TerminalPanel.jsx` - إزالة شريط Enter command المنفصل ونقل إدخال الأوامر إلى prompt داخل مساحة التيرمنال نفسها
+- [2026-05-25 00:00:00 UTC] system:feature `client/src/components/TerminalPanel.jsx` - إكمال مرحلة التيرمنال بإخراج حي streaming وإيقاف الأمر الجاري وprompt متعدد الأسطر وحالة Running/Idle
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان

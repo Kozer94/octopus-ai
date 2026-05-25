@@ -94,7 +94,8 @@ export function TerminalPanel({
   };
 
   const handleKeyDown = (event) => {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       runCurrentCommand();
       return;
     }
@@ -117,6 +118,12 @@ export function TerminalPanel({
       return;
     }
 
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      event.currentTarget.select();
+      return;
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && isRunning && !getSelectedText()) {
       event.preventDefault();
       onInterrupt?.();
@@ -135,6 +142,7 @@ export function TerminalPanel({
     if (command === 'paste') await pasteClipboard();
     if (command === 'interrupt') await onInterrupt?.();
     if (command === 'clear') onClear();
+    if (command === 'focus') inputRef.current?.focus();
   };
 
   return (
@@ -152,6 +160,9 @@ export function TerminalPanel({
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: isRunning ? '#7ee787' : t.textMuted, padding: '0 8px' }}>
+          {isRunning ? 'Running' : 'Idle'}
+        </span>
         {isRunning && (
           <button title="Interrupt (Ctrl+C)" style={{ background: 'transparent', border: 'none', color: '#ff7b72', cursor: 'pointer', padding: '0 8px', fontSize: 14 }} onClick={onInterrupt}>
             <i className="codicon codicon-debug-stop" style={{ fontSize: 14 }} />
@@ -173,12 +184,13 @@ export function TerminalPanel({
           <div key={i} style={{ fontSize: 12, color: historyItem.type === 'input' ? t.accent : historyItem.type === 'error' ? '#ff7b72' : historyItem.type === 'system' ? '#7ee787' : t.text, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{renderTerminalText(historyItem.text)}</div>
         ))}
         {terminalTab === 'terminal' && (
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minHeight: 22, fontSize: 12, lineHeight: 1.6, color: t.text }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, minHeight: 22, fontSize: 12, lineHeight: 1.6, color: t.text }}>
             <span style={{ color: t.accent, flexShrink: 0 }}>$</span>
-            <input
+            <textarea
               ref={inputRef}
               aria-label="Terminal command"
-              style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: t.text, caretColor: t.accent, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, lineHeight: 1.6, padding: 0 }}
+              rows={Math.min(6, Math.max(1, terminalInput.split('\n').length))}
+              style={{ flex: 1, minWidth: 0, resize: 'none', overflow: 'hidden', background: 'transparent', border: 'none', outline: 'none', color: t.text, caretColor: t.accent, fontFamily: 'JetBrains Mono, Consolas, monospace', fontSize: 12, lineHeight: 1.6, padding: 0 }}
               value={terminalInput}
               onChange={e => onCommandChange(e.target.value)}
               onClick={event => event.stopPropagation()}
@@ -204,6 +216,7 @@ export function TerminalPanel({
             { separator: true },
             { label: 'Interrupt', icon: 'codicon-debug-stop', command: 'interrupt', disabled: !isRunning },
             { label: 'Clear', icon: 'codicon-trash', command: 'clear' },
+            { label: 'Focus Prompt', icon: 'codicon-terminal', command: 'focus' },
           ].map((item, index) => item.separator ? (
             <div key={index} style={{ height: 1, background: t.border, margin: '4px 6px' }} />
           ) : (

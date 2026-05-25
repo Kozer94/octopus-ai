@@ -29,7 +29,7 @@ import { startHorizontalResize, startVerticalResize } from './utils/panelResize'
 import { displayFilePath as formatFilePath } from './utils/pathDisplay';
 import { detectRunCommand } from './utils/projectRunCommand';
 import { addRecentProject, getFolderName } from './utils/recentProjects';
-import { TERMINAL_READY_ENTRY, terminalErrorEntry, terminalInputEntry, terminalOutputEntry, terminalPlainErrorEntry, terminalResultEntry, terminalRunEntry, terminalSystemEntry } from './utils/terminalHistory';
+import { TERMINAL_READY_ENTRY, appendTerminalOutputChunk, finishTerminalStream, terminalErrorEntry, terminalExitEntry, terminalInputEntry, terminalOutputEntry, terminalPlainErrorEntry, terminalResultEntry, terminalRunEntry, terminalSystemEntry } from './utils/terminalHistory';
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -45,6 +45,7 @@ export default function App() {
   const [terminalHistory, setTerminalHistory] = useState([TERMINAL_READY_ENTRY]);
   const [terminalInput, setTerminalInput] = useState('');
   const [terminalTab, setTerminalTab] = useState('terminal');
+  const [terminalBusy, setTerminalBusy] = useState(false);
   const [currentDir, setCurrentDir] = useState('');
   const [sidebarWidth, setSidebarWidth] = useState(220);
   const [terminalHeight, setTerminalHeight] = useState(180);
@@ -76,6 +77,7 @@ export default function App() {
   const [pendingTerminalCommands, setPendingTerminalCommands] = useState([]);
   const bottomRef = useRef(null);
   const terminalBottomRef = useRef(null);
+  const terminalAbortRef = useRef(null);
   const searchInputRef = useRef(null);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -152,20 +154,54 @@ export default function App() {
 
   async function runCommand(cmd) {
     if (!cmd.trim()) return;
+    if (terminalBusy) {
+      setTerminalHistory(prev => [...prev, terminalErrorEntry('Terminal command already running. Stop it first with Ctrl+C.')]);
+      return;
+    }
+
+    const controller = new AbortController();
+    terminalAbortRef.current = controller;
+    setTerminalBusy(true);
     setTerminalHistory(prev => [...prev, terminalInputEntry(cmd)]);
     setTerminalInput('');
     setTerminalOpen(true);
     setTerminalTab('terminal');
 
     try {
-      const controller = new AbortController();
-      const data = await terminalApi.command({ command: cmd, cwd: currentDir, signal: controller.signal });
-      setTerminalHistory(prev => [...prev, terminalResultEntry(data)]);
+      await terminalApi.stream({
+        command: cmd,
+        cwd: currentDir,
+        signal: controller.signal,
+        onMessage: message => {
+          if (message.output) {
+            setTerminalHistory(prev => appendTerminalOutputChunk(prev, message.output));
+          }
+          if (message.done) {
+            setTerminalHistory(prev => [...finishTerminalStream(prev), terminalExitEntry(message.code ?? 0)]);
+          }
+        },
+      });
     } catch (e) {
       if (e.name !== 'AbortError') {
         setTerminalHistory(prev => [...prev, terminalErrorEntry(e.message)]);
       }
+    } finally {
+      setTerminalBusy(false);
+      terminalAbortRef.current = null;
     }
+  }
+
+  async function interruptTerminalCommand() {
+    if (terminalBusy) {
+      terminalAbortRef.current?.abort();
+      const data = await terminalApi.interrupt();
+      setTerminalBusy(false);
+      terminalAbortRef.current = null;
+      setTerminalHistory(prev => [...finishTerminalStream(prev), terminalSystemEntry(data.output)]);
+      return;
+    }
+
+    await stopProject();
   }
 
   async function startProject() {
@@ -677,11 +713,11 @@ export default function App() {
 
           {terminalOpen && (
             <TerminalPanel
-              isRunning={isRunning}
+              isRunning={isRunning || terminalBusy}
               onClear={() => setTerminalHistory([TERMINAL_READY_ENTRY])}
               onClose={() => setTerminalOpen(false)}
               onCommandChange={setTerminalInput}
-              onInterrupt={stopProject}
+              onInterrupt={interruptTerminalCommand}
               onRunCommand={runCommand}
               onResizeStart={startTerminalResize}
               onTabChange={setTerminalTab}
