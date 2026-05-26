@@ -2,6 +2,46 @@ import { THEMES } from '../config/uiConfig';
 
 import { useCallback, useEffect, useRef } from 'react';
 
+function WindowControlButton({ action, icon, title, t, danger = false }) {
+  const hoverColor = danger ? '#c42b1c' : t.border;
+
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      style={{
+        width: 46,
+        height: 36,
+        border: 'none',
+        borderRadius: 0,
+        background: 'transparent',
+        color: danger ? '#ffb4ab' : t.textMuted,
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 13,
+        WebkitAppRegion: 'no-drag',
+      }}
+      onClick={e => {
+        e.stopPropagation();
+        window.octopus?.windowControl?.(action);
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = hoverColor;
+        e.currentTarget.style.color = danger ? '#ffffff' : t.text;
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.color = danger ? '#ffb4ab' : t.textMuted;
+      }}
+    >
+      <i className={`codicon ${icon}`} />
+    </button>
+  );
+}
+
 export function TitleBar({
   currentDir,
   doSearch,
@@ -26,6 +66,7 @@ export function TitleBar({
   menuItems,
 }) {
   const searchDebounceRef = useRef(null);
+  const noDrag = { WebkitAppRegion: 'no-drag' };
 
   const debouncedSearch = useCallback((value) => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -41,17 +82,18 @@ export function TitleBar({
 
   return (
     <div
-      style={{ display: "flex", alignItems: "center", height: 36, background: t.activityBar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, padding: "0 10px", gap: 0, position: 'relative', zIndex: 200 }}
+      style={{ display: "flex", alignItems: "center", height: 36, background: t.activityBar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, padding: "0 0 0 10px", gap: 0, position: 'relative', zIndex: 200, WebkitAppRegion: 'drag' }}
       onClick={() => { if (menuOpen) setMenuOpen(null); }}
     >
-      <span style={{ fontSize: 17, marginRight: 6, lineHeight: 1 }}>🐙</span>
-      <span style={{ fontSize: 13, fontWeight: 600, color: t.accent, marginRight: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Octopus AI</span>
-      <div style={{ width: 1, height: 16, background: t.border, marginRight: 8, flexShrink: 0 }} />
+      <span style={{ fontSize: 17, marginRight: 6, lineHeight: 1, ...noDrag }}>🐙</span>
+      <span style={{ fontSize: 13, fontWeight: 600, color: t.accent, marginRight: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', ...noDrag }}>Octopus AI</span>
+      <div style={{ width: 1, height: 16, background: t.border, marginRight: 8, flexShrink: 0, ...noDrag }} />
 
       {menuItems.map(menu => (
-        <div key={menu.id} style={{ position: 'relative' }}>
+        <div key={menu.id} style={{ position: 'relative', ...noDrag }}>
           <button
-            style={{ background: menuOpen === menu.id ? t.border : 'transparent', border: 'none', color: menuOpen === menu.id ? t.text : t.textMuted, padding: '3px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, height: 24 }}
+            type="button"
+            style={{ background: menuOpen === menu.id ? t.border : 'transparent', border: 'none', color: menuOpen === menu.id ? t.text : t.textMuted, padding: '3px 10px', fontSize: 12, cursor: 'pointer', borderRadius: 4, height: 24, ...noDrag }}
             onClick={e => { e.stopPropagation(); setMenuOpen(menuOpen === menu.id ? null : menu.id); }}
             onMouseEnter={e => { if (menuOpen && menuOpen !== menu.id) { setMenuOpen(menu.id); } e.currentTarget.style.color = t.text; }}
             onMouseLeave={e => { if (menuOpen !== menu.id) e.currentTarget.style.color = t.textMuted; }}
@@ -84,9 +126,9 @@ export function TitleBar({
         </div>
       ))}
 
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 16px' }}>
+      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', padding: '0 16px', minWidth: 120 }}>
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 6, background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '3px 10px', width: '100%', maxWidth: 380, cursor: 'text' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '3px 10px', width: '100%', maxWidth: 380, cursor: 'text', ...noDrag }}
           onClick={onSearchActivity}
           onMouseEnter={e => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.boxShadow = `0 0 0 1px ${t.accent}44`; }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.boxShadow = 'none'; }}
@@ -116,9 +158,9 @@ export function TitleBar({
         </div>
       </div>
 
-      <div style={{ width: 1, height: 16, background: t.border, marginRight: 10, flexShrink: 0 }} />
+      <div style={{ width: 1, height: 16, background: t.border, marginRight: 10, flexShrink: 0, ...noDrag }} />
 
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', ...noDrag }}>
         <span
           style={{ fontSize: 11, color: t.textMuted, cursor: 'pointer', padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}
           onClick={e => { e.stopPropagation(); setProjectsOpen(open => !open); setMenuOpen(null); }}
@@ -162,14 +204,15 @@ export function TitleBar({
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 5, alignItems: "center", padding: '0 10px', borderLeft: `0.5px solid ${t.border}`, borderRight: `0.5px solid ${t.border}` }}>
+      <div style={{ display: "flex", gap: 5, alignItems: "center", padding: '0 10px', borderLeft: `0.5px solid ${t.border}`, borderRight: `0.5px solid ${t.border}`, ...noDrag }}>
         <div style={{ width: 6, height: 6, borderRadius: "50%", background: loading ? "#f0883e" : "#3fb950", flexShrink: 0 }} />
         <span style={{ fontSize: 11, color: t.textMuted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{loading ? "Working..." : "Ready"}</span>
       </div>
 
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', ...noDrag }}>
         <button
-          style={{ background: 'transparent', border: 'none', borderRadius: 5, color: t.textMuted, padding: "0 10px", fontSize: 11, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 5, height: 36 }}
+          type="button"
+          style={{ background: 'transparent', border: 'none', borderRadius: 5, color: t.textMuted, padding: "0 10px", fontSize: 11, cursor: "pointer", display: 'flex', alignItems: 'center', gap: 5, height: 36, ...noDrag }}
           onClick={e => { e.stopPropagation(); setThemeOpen(open => !open); setMenuOpen(null); }}
           onMouseEnter={e => e.currentTarget.style.background = t.border}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -192,6 +235,12 @@ export function TitleBar({
             ))}
           </div>
         )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'stretch', marginLeft: 4, ...noDrag }}>
+        <WindowControlButton action="minimize" icon="codicon-chrome-minimize" title="Minimize" t={t} />
+        <WindowControlButton action="maximize" icon="codicon-chrome-maximize" title="Maximize" t={t} />
+        <WindowControlButton action="close" icon="codicon-chrome-close" title="Close" t={t} danger />
       </div>
     </div>
   );

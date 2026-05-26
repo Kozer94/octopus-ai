@@ -53,7 +53,6 @@ export function RightPanel({
   loading,
   messages,
   onResizeStart,
-  onScan,
   onTimelineClear,
   onKey,
   projectName,
@@ -76,7 +75,6 @@ export function RightPanel({
   setSelectedRuntimeTask,
   setRightPanelOpen,
   setRightPanelTab,
-  setTerminalOpen,
   t,
   timelineEvents,
   auditResults,
@@ -228,20 +226,6 @@ export function RightPanel({
                   onClick={send} disabled={loading}
                 >
                   <i className={`codicon ${loading ? 'codicon-loading' : 'codicon-send'}`} style={{ fontSize: 14 }} />
-                </button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <button style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 3 }}
-                  onClick={() => setTerminalOpen(open => !open)}>
-                  <i className="codicon codicon-terminal" style={{ fontSize: 12 }} /> Terminal
-                </button>
-                <button
-                  title="فحص المشروع وكتابة report.md (بدون AI tokens)"
-                  style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: loading ? 'not-allowed' : 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, opacity: loading ? 0.5 : 1 }}
-                  onClick={onScan}
-                  disabled={loading}
-                >
-                  <i className="codicon codicon-search" style={{ fontSize: 12 }} /> Scan Project
                 </button>
               </div>
             </div>

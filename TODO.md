@@ -5,6 +5,9 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-26 14:25:00 +03] system:ui `client/src/components/ActivityBar.jsx` و`client/src/components/EditorWorkspace.jsx` - نقل Terminal وScan Project إلى الشريط الجانبي الأيسر بجانب زر Open Folder وإرجاع شاشة الترحيب للاختصارات.
+- [2026-05-26 14:18:00 +03] system:ui `client/src/components/EditorWorkspace.jsx` و`client/src/components/RightPanel.jsx` - نقل أزرار Terminal وScan Project من أسفل الشات إلى شاشة الترحيب بجانب Open Folder.
+- [2026-05-26 14:10:00 +03] system:ui `main.js` و`preload.js` و`client/src/components/TitleBar.jsx` - إضافة أزرار نافذة مخصصة للإغلاق والتصغير والتكبير داخل شريط العنوان مع إبقاء عناصر المينيو no-drag.
 - [2026-05-26 13:55:00 +03] system:fix `main.js` و`client/index.html` - إصلاح CSP في وضع التطوير للسماح بـ Vite React preamble وإزالة سكربت marked الخارجي غير المستخدم.
 - [2026-05-25 21:30:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` - إضافة WebSocket reconnection مع exponential backoff (max 5 attempts) لحل مشكلة فقدان الاتصال
 - [2026-05-25 21:35:00 UTC] system:fix `client/src/hooks/useOctopusWorkflow.js` - إضافة chunked AI response streaming لمنع تجميد UI مع استجابات طويلة

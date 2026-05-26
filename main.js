@@ -16,6 +16,7 @@ function createWindow() {
     title: 'أخطبوط — Octopus AI',
     backgroundColor: '#0a0a0f',
     autoHideMenuBar: true,
+    frame: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -92,6 +93,20 @@ ipcMain.handle('open-folder', async () => {
     properties: ['openDirectory']
   });
   return result.filePaths[0] || null;
+});
+
+ipcMain.on('window-control', (event, action) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+
+  if (action === 'minimize') {
+    win.minimize();
+  } else if (action === 'maximize') {
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  } else if (action === 'close') {
+    win.close();
+  }
 });
 
 app.whenReady().then(() => {

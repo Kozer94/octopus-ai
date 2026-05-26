@@ -206,11 +206,17 @@ export function AppShell(props) {
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <ActivityBar
           activeActivity={activeActivity}
+          loading={loading}
           onActivityChange={(activityId) => {
             if (activeActivity === activityId) setSidebarOpen(p => !p);
             else { setActiveActivity(activityId); setSidebarOpen(true); }
           }}
           onOpenFolder={openFolder}
+          onScanProject={handleScan}
+          onTerminalToggle={() => {
+            setTerminalOpen(open => !open);
+            setTerminalTab('terminal');
+          }}
           t={t}
         />
 
@@ -334,7 +340,6 @@ export function AppShell(props) {
           onAuditRun={onAuditRun}
           onResizeStart={startRightPanelResize}
           onRuntimeRefresh={refreshRuntimeInspector}
-          onScan={handleScan}
           onTimelineClear={() => setTimelineEvents([])}
           projectName={projectName}
           reset={reset}
@@ -356,7 +361,6 @@ export function AppShell(props) {
           setRightPanelOpen={setRightPanelOpen}
           setRightPanelTab={setRightPanelTab}
           setSelectedRuntimeTask={setSelectedRuntimeTask}
-          setTerminalOpen={setTerminalOpen}
           t={t}
           timelineEvents={timelineEvents}
         />
