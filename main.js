@@ -7,6 +7,7 @@ dotenv.config({ path: path.join(__dirname, 'server', '.env') });
 const supervisor = require('./server/supervisor');
 
 function createWindow() {
+  const isDev = !app.isPackaged;
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -24,18 +25,26 @@ function createWindow() {
   });
 
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    const contentSecurityPolicy = isDev
+      ? "default-src 'self'; " +
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' data: https://fonts.gstatic.com; " +
+        "connect-src 'self' ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; " +
+        "img-src 'self' data: https:; " +
+        "worker-src 'self' blob:"
+      : "default-src 'self'; " +
+        "script-src 'self'; " +
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+        "font-src 'self' data: https://fonts.gstatic.com; " +
+        "connect-src 'self'; " +
+        "img-src 'self' data: https:; " +
+        "worker-src 'self' blob:";
+
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; " +
-          "script-src 'self' 'unsafe-eval'; " +
-          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-          "font-src 'self' data: https://fonts.gstatic.com; " +
-          "connect-src 'self' ws://localhost:* http://localhost:*; " +
-          "img-src 'self' data: https:; " +
-          "worker-src 'self' blob:"
-        ],
+        'Content-Security-Policy': [contentSecurityPolicy],
       },
     });
   });

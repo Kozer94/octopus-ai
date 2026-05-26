@@ -5,6 +5,7 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-26 13:55:00 +03] system:fix `main.js` و`client/index.html` - إصلاح CSP في وضع التطوير للسماح بـ Vite React preamble وإزالة سكربت marked الخارجي غير المستخدم.
 - [2026-05-25 21:30:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` - إضافة WebSocket reconnection مع exponential backoff (max 5 attempts) لحل مشكلة فقدان الاتصال
 - [2026-05-25 21:35:00 UTC] system:fix `client/src/hooks/useOctopusWorkflow.js` - إضافة chunked AI response streaming لمنع تجميد UI مع استجابات طويلة
 - [2026-05-25 21:40:00 UTC] system:fix `client/src/components/ErrorBoundary.jsx` و`client/src/main.jsx` - إضافة Error Boundary wrapper لمنع crashes شاملة للتطبيق
