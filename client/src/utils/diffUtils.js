@@ -58,8 +58,15 @@ export function buildLineDiff(oldContent, newContent) {
   return diff;
 }
 
+export function removeUnknownScriptCharacters(text) {
+  return String(text || '')
+    .replace(/[\p{L}\p{M}]*[\u0100-\u024F\u1E00-\u1EFF\u0370-\u03FF\u0400-\u04FF][\p{L}\p{M}]*/gu, '')
+    .replace(/[\u3400-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]+/g, '')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
 export function cleanChatText(text) {
-  return (text || '')
+  return removeUnknownScriptCharacters(text || '')
     .replace(/<file path="[^"]+">[\s\S]*?<\/file>/g, '')
     .replace(/<edit path="[^"]+">[\s\S]*?<\/edit>/g, '')
     .replace(/<terminal>[\s\S]*?<\/terminal>/g, '')

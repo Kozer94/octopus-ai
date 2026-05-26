@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { getFileIcon } from '../utils/fileIcons';
+import { isOpenFileActive } from '../utils/openFileIdentity';
 
 export function FileTreeNode({ item, level, activeFile, onFileClick, t }) {
   const [open, setOpen] = useState(false);
@@ -36,7 +37,7 @@ export function FileTreeNode({ item, level, activeFile, onFileClick, t }) {
   }
 
   const { icon, color } = getFileIcon(item.name);
-  const isActive = item.name === activeFile;
+  const isActive = isOpenFileActive(item, activeFile);
   return (
     <div
       onClick={() => onFileClick(item)}

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { filesApi } from '../services/apiClient';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 import { upsertOpenedFile } from '../utils/openFilesState';
 import { displayFilePath as formatFilePath } from '../utils/pathDisplay';
 import { addRecentProject, getFolderName } from '../utils/recentProjects';
@@ -29,15 +30,16 @@ export function useProjectWorkspace({
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [loadingFiles, setLoadingFiles] = useState(new Set());
 
-  const currentFile = files.find(f => f.name === activeFile);
+  const currentFile = files.find(f => isOpenFileActive(f, activeFile));
   const displayFilePath = file => formatFilePath({ file, activeFile, currentDir, projectName });
 
   async function onFileClick(item) {
-    setActiveFile(item.name);
+    const fileId = getOpenFileId(item);
+    setActiveFile(fileId);
     const already = files.find(f => f.path === item.path);
     if (already?.content) return;
     try {
-      setLoadingFiles(prev => new Set(prev).add(item.name));
+      setLoadingFiles(prev => new Set(prev).add(fileId));
       const data = await filesApi.read({ filePath: item.path, projectDir: currentDir });
       if (data.success) setFiles(prev => upsertOpenedFile(prev, item, data.content));
     } catch {
@@ -45,7 +47,7 @@ export function useProjectWorkspace({
     } finally {
       setLoadingFiles(prev => {
         const next = new Set(prev);
-        next.delete(item.name);
+        next.delete(fileId);
         return next;
       });
     }
@@ -101,9 +103,9 @@ export function useProjectWorkspace({
 
   function closeActiveFile() {
     if (!activeFile) return;
-    const remaining = files.filter(file => file.name !== activeFile);
+    const remaining = files.filter(file => !isOpenFileActive(file, activeFile));
     setFiles(remaining);
-    setActiveFile(remaining.at(-1)?.name || '');
+    setActiveFile(getOpenFileId(remaining.at(-1)));
   }
 
   function closeAllFiles() {

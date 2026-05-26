@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { bidiIsolateStyle } from '../utils/bidiText';
 import { getFileIcon } from '../utils/fileIcons';
 import { flattenVisibleFileTree, getVirtualWindow } from '../utils/fileTreeView';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 
 const FILE_TREE_ROW_HEIGHT = 24;
 const FILE_TREE_OVERSCAN = 12;
@@ -21,7 +22,7 @@ function getFolderColor(name) {
 
 function FileTreeRow({ activeFile, onFileClick, row, style, t, toggleFolder }) {
   const { item, level, isDir, isOpen } = row;
-  const isActive = !isDir && item.name === activeFile;
+  const isActive = !isDir && getOpenFileId(item) === activeFile;
   const paddingLeft = 8 + level * 12;
 
   if (isDir) {
@@ -143,18 +144,18 @@ export function ExplorerPanel({
           </div>
         )
         : files.map(f => (
-          <div key={f.name}
+          <div key={getOpenFileId(f)}
             title={displayFilePath(f)}
-            style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", cursor: "pointer", background: f.name === activeFile ? t.accent + '22' : 'transparent', borderRight: f.name === activeFile ? `2px solid ${t.accent}` : '2px solid transparent' }}
-            onClick={() => onSetActiveFile(f.name)}
-            onMouseEnter={e => { if (f.name !== activeFile) e.currentTarget.style.background = t.border + '66' }}
-            onMouseLeave={e => { if (f.name !== activeFile) e.currentTarget.style.background = 'transparent' }}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", cursor: "pointer", background: isOpenFileActive(f, activeFile) ? t.accent + '22' : 'transparent', borderRight: isOpenFileActive(f, activeFile) ? `2px solid ${t.accent}` : '2px solid transparent' }}
+            onClick={() => onSetActiveFile(getOpenFileId(f))}
+            onMouseEnter={e => { if (!isOpenFileActive(f, activeFile)) e.currentTarget.style.background = t.border + '66' }}
+            onMouseLeave={e => { if (!isOpenFileActive(f, activeFile)) e.currentTarget.style.background = 'transparent' }}
           >
             {(() => {
               const { icon, color } = getFileIcon(f.name);
               return <i className={`codicon ${icon}`} style={{ color, fontSize: 14 }} />;
             })()}
-            <span dir="auto" style={bidiIsolateStyle({ fontSize: 12, color: f.name === activeFile ? t.text : t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{displayFilePath(f)}</span>
+            <span dir="auto" style={bidiIsolateStyle({ fontSize: 12, color: isOpenFileActive(f, activeFile) ? t.text : t.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{displayFilePath(f)}</span>
           </div>
         ))
       }

@@ -8,6 +8,7 @@ export function StatusBar({
   onThemeClick,
   runProcess,
   t,
+  children,
 }) {
   return (
     <div style={{ height: 22, background: t.statusBar, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 16, flexShrink: 0 }}>
@@ -16,11 +17,13 @@ export function StatusBar({
       </span>
       <button
         onClick={onRunToggle}
+        className={isRunning ? 'runtime-pulse' : ''}
         style={{
           background: isRunning ? '#da3633' : '#2ea043',
           border: 'none', borderRadius: 4, cursor: 'pointer',
           color: '#fff', padding: '1px 8px', fontSize: 11,
           display: 'flex', alignItems: 'center', gap: 4,
+          transition: 'background 0.2s ease',
         }}
       >
         <i className={`codicon ${isRunning ? 'codicon-stop-circle' : 'codicon-play'}`} style={{ fontSize: 12 }} />
@@ -31,6 +34,7 @@ export function StatusBar({
           {runProcess}
         </span>
       )}
+      {children}
       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🐙 Octopus AI</span>
       <div style={{ flex: 1 }} />
       <span dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 })}>

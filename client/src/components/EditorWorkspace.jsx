@@ -1,7 +1,8 @@
 import Editor from "@monaco-editor/react";
 import { bidiIsolateStyle, bidiPlainTextStyle } from '../utils/bidiText';
-import { getEditorLanguage } from '../utils/editorLanguage';
+import { getEditorLanguage, isBinaryEditorFile } from '../utils/editorLanguage';
 import { getFileIcon } from '../utils/fileIcons';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 
 const FALLBACK_NODES = [
   { name: 'workspace', icon: 'codicon-root-folder', color: '#58a6ff', x: 50, y: 28 },
@@ -28,7 +29,7 @@ function SpatialHome({ currentDir, displayFilePath, files, projectName, setActiv
     ? sourceFiles.map((file, index) => {
         const { icon, color } = getFileIcon(file.name);
         const [x, y] = NODE_POSITIONS[index % NODE_POSITIONS.length];
-        return { name: displayFilePath(file), fileName: file.name, icon, color, x, y };
+        return { name: displayFilePath(file), fileName: getOpenFileId(file), icon, color, x, y };
       })
     : FALLBACK_NODES;
 
@@ -206,7 +207,7 @@ function SpatialHome({ currentDir, displayFilePath, files, projectName, setActiv
               const { icon, color } = getFileIcon(file.name);
               return (
                 <button
-                  key={file.name}
+                  key={getOpenFileId(file)}
                   title={displayFilePath(file)}
                   style={{
                     display: 'grid',
@@ -220,7 +221,7 @@ function SpatialHome({ currentDir, displayFilePath, files, projectName, setActiv
                     cursor: 'pointer',
                     minWidth: 0,
                   }}
-                  onClick={() => setActiveFile(file.name)}
+                  onClick={() => setActiveFile(getOpenFileId(file))}
                 >
                   <i className={`codicon ${icon}`} style={{ color, fontSize: 13 }} />
                   <span dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>
@@ -282,23 +283,25 @@ export function EditorWorkspace({
   uninstallExtension,
 }) {
   const hiddenTabCount = Math.max(0, files.length - 8);
+  const isBinaryFile = isBinaryEditorFile(activeFile);
 
   return (
     <>
       <div style={{ display: "flex", background: t.sidebar, borderBottom: `0.5px solid ${t.border}`, flexShrink: 0, overflowX: "auto" }}>
         {files.map(f => {
           const { icon, color } = getFileIcon(f.name);
-          const isActive = f.name === activeFile;
+          const fileId = getOpenFileId(f);
+          const isActive = isOpenFileActive(f, activeFile);
           const fullDisplayPath = displayFilePath(f);
 
           return (
             <div
-              key={f.name}
+              key={fileId}
               title={fullDisplayPath}
               style={{ padding: "6px 14px", fontSize: 12, cursor: "pointer", color: isActive ? t.text : t.textMuted, borderBottom: isActive ? `2px solid ${t.accent}` : `2px solid transparent`, background: isActive ? t.bg : 'transparent', whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 10, maxWidth: 240, flex: '0 0 auto', position: 'relative' }}
-              onClick={() => setActiveFile(f.name)}
+              onClick={() => setActiveFile(fileId)}
             >
-              {loadingFiles?.has(f.name) && (
+              {loadingFiles?.has(fileId) && (
                 <span data-respects-reduced-motion style={{ position: 'absolute', left: 6, width: 8, height: 8, borderRadius: '50%', background: t.accent, animation: 'spin 1s linear infinite' }}>
                   <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                 </span>
@@ -309,11 +312,11 @@ export function EditorWorkspace({
                 style={{ fontSize: 14, color: t.textMuted, marginRight: 2, lineHeight: 1, padding: '0 2px', borderRadius: 3, opacity: isActive ? 1 : 0 }}
                 onClick={e => {
                   e.stopPropagation();
-                  const remaining = files.filter(file => file.name !== f.name);
+                  const remaining = files.filter(file => getOpenFileId(file) !== fileId);
                   setFiles(remaining);
-                  if (activeFile === f.name && remaining.length > 0) {
-                    setActiveFile(remaining[remaining.length - 1].name);
-                  } else if (activeFile === f.name) {
+                  if (activeFile === fileId && remaining.length > 0) {
+                    setActiveFile(getOpenFileId(remaining[remaining.length - 1]));
+                  } else if (activeFile === fileId) {
                     setActiveFile('');
                   }
                 }}
@@ -409,12 +412,40 @@ export function EditorWorkspace({
               )}
             </div>
           </div>
+        ) : activeFile && currentFile && isBinaryFile ? (
+          <div style={{
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: t.bg,
+            color: t.textMuted,
+            padding: 24,
+          }}>
+            <div style={{
+              width: 'min(420px, 90%)',
+              border: `0.5px solid ${t.border}`,
+              borderRadius: 8,
+              background: t.sidebar,
+              padding: 18,
+              textAlign: 'center',
+              boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
+            }}>
+              <i className="codicon codicon-database" style={{ color: t.accent, fontSize: 28, marginBottom: 10 }} />
+              <p dir="auto" style={bidiIsolateStyle({ color: t.text, fontSize: 13, marginBottom: 6 })}>
+                {displayFilePath(currentFile)}
+              </p>
+              <p style={{ fontSize: 12, lineHeight: 1.6 }}>
+                This file is binary, so it cannot be opened safely in the code editor.
+              </p>
+            </div>
+          </div>
         ) : activeFile && currentFile ? (
           <Editor
             height="100%"
             language={getEditorLanguage(activeFile)}
             value={currentFile?.content || ""}
-            onChange={val => setFiles(prev => prev.map(f => f.name === activeFile ? { ...f, content: val } : f))}
+            onChange={val => setFiles(prev => prev.map(f => isOpenFileActive(f, activeFile) ? { ...f, content: val } : f))}
             onMount={(editor, monaco) => { editorRef.current = editor; monacoRef.current = monaco; }}
             theme={t.editorTheme}
             options={{

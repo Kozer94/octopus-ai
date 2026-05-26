@@ -18,3 +18,10 @@ test('SYSTEM_PROMPT contains required output tags', () => {
   assert.equal(SYSTEM_PROMPT.includes('<terminal>'), true);
   assert.equal(SYSTEM_PROMPT.includes('<file path='), true);
 });
+
+test('SYSTEM_PROMPT contains Octopus identity facts', () => {
+  assert.equal(SYSTEM_PROMPT.includes('ئامانج صالحي'), true);
+  assert.equal(SYSTEM_PROMPT.includes('كوزر'), true);
+  assert.equal(SYSTEM_PROMPT.includes('24-30 مايو 2026'), true);
+  assert.equal(SYSTEM_PROMPT.includes('Electron + Vite/React'), true);
+});

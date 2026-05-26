@@ -16,10 +16,22 @@ import {
   userMessage,
 } from '../utils/chatMessages';
 import { extractCode } from '../utils/diffUtils';
-import { buildOpenFilesContext, isComplexOctopusTask } from '../utils/octopusPromptContext';
+import { buildOpenFilesContext, getLocalEconomyReply, isComplexOctopusTask, shouldSendProjectContext } from '../utils/octopusPromptContext';
 import { getTerminalCommandsFromResponse } from '../utils/octopusResponse';
 import { applyLegUpdates } from '../utils/legState';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 import { upsertFileByName } from '../utils/openFilesState';
+
+function upsertActiveFileContent(files, activeFile, content) {
+  const exists = files.some(file => isOpenFileActive(file, activeFile));
+  if (!exists) return upsertFileByName(files, activeFile, content);
+
+  return files.map(file =>
+    isOpenFileActive(file, activeFile)
+      ? { ...file, content }
+      : file
+  );
+}
 
 export function useOctopusWorkflow({
   activeFile,
@@ -141,11 +153,18 @@ export function useOctopusWorkflow({
     });
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(commandOverride) {
+    const text = (commandOverride ?? input).trim();
     if (!text || loading) return;
     if (awaitingConfirm) {
       setMessages(prev => [...prev, OCTOPUS_BUSY_MESSAGE]);
+      return;
+    }
+
+    const localReply = getLocalEconomyReply(text);
+    if (localReply) {
+      setInput('');
+      setMessages(prev => [...prev, userMessage(text), octopusMessage(localReply)]);
       return;
     }
 
@@ -155,28 +174,29 @@ export function useOctopusWorkflow({
     clearWorkflowError();
     resetLegs();
 
-    const openFilesContext = buildOpenFilesContext(files);
+    const includeProjectContext = shouldSendProjectContext(text);
+    const openFilesContext = includeProjectContext ? buildOpenFilesContext(files) : '';
     const isComplexTask = isComplexOctopusTask(text);
 
     if (!isComplexTask) {
       activateLeg(1, 'Analyzing request...');
-      const currentFile = files.find(file => file.name === activeFile);
+      const currentFile = files.find(file => isOpenFileActive(file, activeFile));
 
       try {
         const data = await octopusApi.send({
           command: text,
           sessionId,
-          activeFile,
-          activeFileContent: currentFile?.content || '',
+          activeFile: includeProjectContext ? activeFile : '',
+          activeFileContent: includeProjectContext ? currentFile?.content || '' : '',
           projectContext: openFilesContext,
-          projectDir,
+          projectDir: includeProjectContext ? projectDir : '',
         });
 
         getTerminalCommandsFromResponse(data).forEach(queueTerminalCommand);
 
         if (data.success) {
           const code = extractCode(data.result);
-          if (code) setFiles(prev => upsertFileByName(prev, activeFile, code));
+          if (code) setFiles(prev => upsertActiveFileContent(prev, activeFile, code));
           completeLeg(1);
           setMessages(prev => [...prev, octopusMessage(data.result)]);
         } else {
@@ -245,7 +265,7 @@ export function useOctopusWorkflow({
     clearWorkflowError();
     resetLegs();
 
-    const currentFile = files.find(file => file.name === activeFile);
+    const currentFile = files.find(file => isOpenFileActive(file, activeFile));
 
     if (plan && Array.isArray(plan.tasks)) {
       plan.tasks.forEach(task => activateLeg(task.leg, task.task));
@@ -265,7 +285,7 @@ export function useOctopusWorkflow({
       const data = await octopusApi.parallelStream({
         command,
         sessionId,
-        activeFile,
+        activeFile: currentFile ? getOpenFileId(currentFile) : activeFile,
         activeFileContent: currentFile?.content || '',
         projectContext: openFilesContext,
         projectDir,
@@ -313,7 +333,7 @@ export function useOctopusWorkflow({
         setTimeout(async () => {
           const code = extractCode(data.result);
           if (code) {
-            setFiles(prev => upsertFileByName(prev, activeFile, code));
+            setFiles(prev => upsertActiveFileContent(prev, activeFile, code));
             if (currentFile?.path) await filesApi.write({ filePath: currentFile.path, content: code });
           }
 

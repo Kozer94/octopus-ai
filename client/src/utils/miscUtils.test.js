@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyLegUpdates, finishLeg, resetLegState, startLeg } from './legState.js';
-import { buildOpenFilesContext, isComplexOctopusTask } from './octopusPromptContext.js';
+import { buildOpenFilesContext, getLocalEconomyReply, getPromptEconomyProfile, isComplexOctopusTask, shouldSendProjectContext } from './octopusPromptContext.js';
 import { detectRunCommand } from './projectRunCommand.js';
 import { flattenVisibleFileTree, getVirtualWindow } from './fileTreeView.js';
 import { clampPanelWidth, getViewportBoundedPanelMax } from './panelResize.js';
@@ -46,7 +46,18 @@ test('octopus prompt helpers build bounded context and detect complex tasks', ()
   assert.match(context, /### a\.js/);
   assert.equal(context.includes('empty.js'), false);
   assert.equal(isComplexOctopusTask('report'), true);
+  assert.equal(isComplexOctopusTask('هل تعرف كل لغات البرمجة او بس هذا ثلاثة'), false);
+  assert.equal(isComplexOctopusTask('أريد أعرف عنك أكثر'), false);
+  assert.equal(isComplexOctopusTask('أضف زر جديد للشات'), true);
   assert.equal(isComplexOctopusTask('short'), false);
+  assert.equal(shouldSendProjectContext('هل تعرف كل لغات البرمجة او بس هذا ثلاثة'), false);
+  assert.equal(shouldSendProjectContext('اشرح الملف الحالي'), true);
+  assert.match(getLocalEconomyReply('من مطورك؟'), /ئامانج صالحي/);
+  assert.match(getLocalEconomyReply('من مطورك؟'), /24-30 مايو 2026/);
+  assert.equal(getPromptEconomyProfile('').id, 'empty');
+  assert.equal(getPromptEconomyProfile('من مطورك؟').id, 'local');
+  assert.equal(getPromptEconomyProfile('هل تعرف Flutter؟').id, 'light');
+  assert.equal(getPromptEconomyProfile('اشرح الملف الحالي').id, 'project');
 });
 
 test('leg state helpers update a single leg', () => {

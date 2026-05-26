@@ -9,6 +9,9 @@ import {
   userMessage,
 } from './chatMessages.js';
 import { displayFilePath } from './pathDisplay.js';
+import { getEditorLanguage, isBinaryEditorFile } from './editorLanguage.js';
+import { THEMES } from '../config/uiConfig.js';
+import { cleanChatText, removeUnknownScriptCharacters } from './diffUtils.js';
 import { splitTerminalLinks } from './terminalLinks.js';
 import {
   TERMINAL_READY_ENTRY,
@@ -47,6 +50,12 @@ test('chat message helpers keep role and text shape stable', () => {
     { role: 'octopus', text: 'Scan error: scan bad' },
   );
   assert.equal(OCTOPUS_BUSY_MESSAGE.role, 'octopus');
+});
+
+test('chat text cleanup removes unknown CJK script leaks', () => {
+  assert.equal(removeUnknownScriptCharacters('أستطيع أن أ提供 النصائح'), 'أستطيع أن أ النصائح');
+  assert.equal(removeUnknownScriptCharacters('لكي أ trở أذكى'), 'لكي أ أذكى');
+  assert.equal(cleanChatText('أستطيع أن أ提供 النصائح'), 'أستطيع أن أ النصائح');
 });
 
 test('terminal history helpers preserve entry types', () => {
@@ -97,6 +106,17 @@ test('displayFilePath normalizes project-relative paths', () => {
 
 test('displayFilePath falls back to active file when no file is selected', () => {
   assert.equal(displayFilePath({ activeFile: 'README.md' }), 'README.md');
+});
+
+test('editor language and binary detection classify opened files', () => {
+  assert.equal(getEditorLanguage('src/App.jsx'), 'javascript');
+  assert.equal(getEditorLanguage('schema.prisma'), 'plaintext');
+  assert.equal(isBinaryEditorFile('dev.db'), true);
+  assert.equal(isBinaryEditorFile('README.md'), false);
+});
+
+test('solarized uses a matching Monaco editor theme', () => {
+  assert.equal(THEMES.solarized.editorTheme, 'octopus-solarized');
 });
 
 test('bidi text helpers preserve mixed Arabic and English rendering intent', () => {

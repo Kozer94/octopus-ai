@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { AuditorPanel } from '../auditor/AuditorPanel';
 import { cleanChatText } from '../utils/diffUtils';
 import { bidiIsolateStyle, bidiPlainTextStyle } from '../utils/bidiText';
 import { getFileIcon } from '../utils/fileIcons';
+import { getPromptEconomyProfile } from '../utils/octopusPromptContext';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 import { RuntimeInspectorPanel } from './RuntimeInspectorPanel';
 import { TimelinePanel } from './TimelinePanel';
 
@@ -14,6 +17,53 @@ const RIGHT_PANEL_ITEMS = [
   { id: 'history', icon: 'codicon-history',            title: 'History' },
   { id: 'audit',   icon: 'codicon-shield-check',       title: 'Audit' },
 ];
+
+const CHAT_MODES = [
+  { id: 'build', label: 'Build', icon: 'codicon-tools', placeholder: 'Describe what you want to build...' },
+  { id: 'fix', label: 'Fix', icon: 'codicon-bug', placeholder: 'Paste the error or describe what is broken...' },
+  { id: 'explain', label: 'Explain', icon: 'codicon-book', placeholder: 'Ask Octopus to explain code, files, or behavior...' },
+  { id: 'refactor', label: 'Refactor', icon: 'codicon-symbol-method', placeholder: 'Describe the refactor you want...' },
+  { id: 'test', label: 'Test', icon: 'codicon-beaker', placeholder: 'Ask for tests, checks, or verification...' },
+  { id: 'inquiry', label: 'Inquiry', icon: 'codicon-comment-unresolved', placeholder: 'Bring an idea, dilemma, or design question for Socratic inquiry...' },
+];
+
+function getChatMessageMeta(message) {
+  if (message.role !== 'octopus') {
+    return { icon: 'codicon-account', label: 'Command', color: '#7f9aa3' };
+  }
+
+  const text = String(message.text || '').toLowerCase();
+  if (text.includes('error') || text.includes('failed') || text.includes('خطأ')) return { icon: 'codicon-error', label: 'Error', color: '#ff7b72' };
+  if (/<terminal>|```(?:bash|sh|powershell|shell)|\b(npm|node|php|composer|git)\s+/i.test(text)) return { icon: 'codicon-terminal', label: 'Terminal', color: '#f0883e' };
+  if (text.includes('plan') || text.includes('approve') || text.includes('خطة')) return { icon: 'codicon-checklist', label: 'Plan', color: '#58a6ff' };
+  if (text.includes('saved') || text.includes('modified') || text.includes('file') || text.includes('diff')) return { icon: 'codicon-file-code', label: 'Change', color: '#3fb950' };
+  if (text.includes('?')) return { icon: 'codicon-question', label: 'Question', color: '#d2a8ff' };
+  return { icon: 'codicon-sparkle', label: 'Reply', color: '#2aa198' };
+}
+
+function composeChatCommand(text, mode) {
+  const trimmed = text.trim();
+  if (!trimmed) return '';
+
+  if (mode === 'inquiry') {
+    return `[Mode: Inquiry]
+Act as a senior software engineer and philosophical Socratic partner.
+Ask clarifying questions when the request is ambiguous.
+Challenge assumptions respectfully.
+Separate technical facts from product/design judgment.
+Do not rush to implementation unless I clearly ask you to execute.
+Help me think through tradeoffs, meaning, user impact, and engineering constraints.
+
+My idea/question:
+${trimmed}`;
+  }
+
+  if (mode === 'fix') return `[Mode: Fix]\nDiagnose the issue first, then propose the smallest safe fix.\n\n${trimmed}`;
+  if (mode === 'explain') return `[Mode: Explain]\nExplain clearly, with engineering judgment and examples when useful.\n\n${trimmed}`;
+  if (mode === 'refactor') return `[Mode: Refactor]\nPreserve behavior, reduce complexity, and explain the tradeoffs.\n\n${trimmed}`;
+  if (mode === 'test') return `[Mode: Test]\nFocus on verification, edge cases, and regression risk.\n\n${trimmed}`;
+  return trimmed;
+}
 
 function getPanelIcon(tab) {
   if (tab === 'chat') return 'codicon-comment-discussion';
@@ -54,7 +104,6 @@ export function RightPanel({
   messages,
   onResizeStart,
   onTimelineClear,
-  onKey,
   projectName,
   reset,
   rightPanelOpen,
@@ -81,9 +130,29 @@ export function RightPanel({
   onAuditRun,
   onRuntimeRefresh,
 }) {
+  const [chatMode, setChatMode] = useState('build');
   const legColor = (status) => status === "done" ? "#3fb950" : status === "working" ? "#f0883e" : t.textMuted;
   const openFiles = files.filter(file => file.content);
   const userMessages = messages.filter(message => message.role === 'user');
+  const activeMode = CHAT_MODES.find(mode => mode.id === chatMode) || CHAT_MODES[0];
+  const economyProfile = getPromptEconomyProfile(input);
+  const economyColor = economyProfile.id === 'local'
+    ? '#3fb950'
+    : economyProfile.id === 'light'
+      ? t.accent
+      : economyProfile.id === 'project'
+        ? '#f0883e'
+        : t.textMuted;
+  const sendChatMessage = () => {
+    const command = composeChatCommand(input, chatMode);
+    if (command) send(command);
+  };
+  const handleChatKeyDown = (event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      sendChatMessage();
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexShrink: 0 }}>
@@ -189,23 +258,52 @@ export function RightPanel({
         {rightPanelTab === 'chat' && (
           <>
             <div style={{ flex: 1, overflowY: "auto", padding: 10 }}>
-              {messages.map((message) => (
+              {messages.map((message) => {
+                const meta = getChatMessageMeta(message);
+                const displayText = message.role === 'octopus' ? cleanChatText(message.text) : message.text;
+                return (
                 <div key={getMessageKey(message)} style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: message.role === 'octopus' ? t.accent + '33' : t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
-                      {message.role === 'octopus' ? '🐙' : '👤'}
+                    <div style={{ width: 18, height: 18, borderRadius: '50%', background: message.role === 'octopus' ? meta.color + '22' : t.border, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
+                      {message.role === 'octopus' ? '🐙' : <i className="codicon codicon-account" style={{ fontSize: 11 }} />}
                     </div>
                     <span style={{ fontSize: 10, color: message.role === "octopus" ? t.accent : t.textMuted, fontWeight: 500 }}>
                       {message.role === "octopus" ? "Octopus" : "You"}
                     </span>
+                    <span style={{ marginLeft: 4, border: `0.5px solid ${meta.color}55`, color: meta.color, background: meta.color + '12', borderRadius: 999, padding: '1px 6px', fontSize: 9, fontWeight: 650 }}>
+                      <i className={`codicon ${meta.icon}`} style={{ fontSize: 9, marginRight: 4 }} />
+                      {meta.label}
+                    </span>
                   </div>
-                  <div style={{ marginRight: 23, background: message.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${t.border}`, overflow: 'hidden', minWidth: 0 }}>
+                  <div style={{ marginRight: 23, background: message.role === 'octopus' ? t.bg : t.accent + '11', borderRadius: '0 8px 8px 8px', padding: '6px 10px', border: `0.5px solid ${message.role === 'octopus' ? meta.color + '44' : t.border}`, overflow: 'hidden', minWidth: 0 }}>
                     <p dir="auto" style={bidiPlainTextStyle({ fontSize: 11, color: t.text, margin: 0, lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" })}>
-                      {message.role === 'octopus' ? cleanChatText(message.text) : message.text}
+                      {displayText}
                     </p>
+                    {message.role === 'octopus' && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                        <button
+                          onClick={() => navigator.clipboard?.writeText(displayText)}
+                          style={{ background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 5, color: t.textMuted, cursor: 'pointer', fontSize: 10, padding: '3px 7px' }}
+                        >
+                          <i className="codicon codicon-copy" style={{ fontSize: 10, marginRight: 4 }} /> Copy
+                        </button>
+                        <button
+                          onClick={() => setInput(`Explain this response in simpler terms:\n\n${displayText.slice(0, 700)}`)}
+                          style={{ background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 5, color: t.textMuted, cursor: 'pointer', fontSize: 10, padding: '3px 7px' }}
+                        >
+                          <i className="codicon codicon-lightbulb" style={{ fontSize: 10, marginRight: 4 }} /> Explain
+                        </button>
+                        <button
+                          onClick={() => window.open('/dev-hud.html', 'octopus-dev-hud', 'width=980,height=720')}
+                          style={{ background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 5, color: t.textMuted, cursor: 'pointer', fontSize: 10, padding: '3px 7px' }}
+                        >
+                          <i className="codicon codicon-open-preview" style={{ fontSize: 10, marginRight: 4 }} /> HUD
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ))}
+              )})}
               {awaitingConfirm && (
                 <div style={{ display: 'flex', gap: 8, marginBottom: 10, paddingRight: 23 }}>
                   <button style={{ background: '#238636', border: 'none', borderRadius: 6, color: '#fff', padding: '7px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 500 }} onClick={executeApprovedPlan}>
@@ -219,20 +317,49 @@ export function RightPanel({
               <div ref={bottomRef} />
             </div>
             <div style={{ padding: "8px 10px", borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 7, overflowX: 'auto' }}>
+                {CHAT_MODES.map(mode => (
+                  <button
+                    key={mode.id}
+                    title={mode.label}
+                    onClick={() => setChatMode(mode.id)}
+                    style={{
+                      width: 26,
+                      height: 24,
+                      borderRadius: 5,
+                      border: `0.5px solid ${chatMode === mode.id ? economyColor : t.border}`,
+                      background: chatMode === mode.id ? economyColor + '18' : 'transparent',
+                      color: chatMode === mode.id ? economyColor : t.textMuted,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <i className={`codicon ${mode.icon}`} style={{ fontSize: 12 }} />
+                  </button>
+                ))}
+                <div style={{ flex: 1 }} />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: economyColor, fontSize: 10, whiteSpace: 'nowrap' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: economyColor, boxShadow: `0 0 8px ${economyColor}` }} />
+                  {economyProfile.label}
+                </span>
+              </div>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: '6px 8px' }}>
                 <textarea
                   aria-label="Command input"
                   style={{ flex: 1, background: 'transparent', color: t.text, border: 'none', outline: 'none', fontSize: 12, resize: 'none', fontFamily: "'Inter', 'Segoe UI', sans-serif", lineHeight: 1.5 }}
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  onKeyDown={onKey}
-                  placeholder="Type your command..."
+                  onKeyDown={handleChatKeyDown}
+                  placeholder={activeMode.placeholder}
                   rows={2}
                   dir="auto"
                 />
                 <button
                   style={{ background: loading ? t.border : t.accent, border: 'none', borderRadius: 6, color: '#fff', width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                  onClick={send} disabled={loading}
+                  onClick={sendChatMessage} disabled={loading}
                 >
                   <i className={`codicon ${loading ? 'codicon-loading' : 'codicon-send'}`} style={{ fontSize: 14 }} />
                 </button>
@@ -249,14 +376,14 @@ export function RightPanel({
               : openFiles.slice(0, 5).map((file) => {
                   const { icon, color } = getFileIcon(file.name);
                   return (
-                    <div key={file.path || file.name} title={displayFilePath(file)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 4, background: file.name === activeFile ? t.accent + '11' : t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
-                      onClick={() => setActiveFile(file.name)}>
+                    <div key={file.path || file.name} title={displayFilePath(file)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 6, marginBottom: 4, background: isOpenFileActive(file, activeFile) ? t.accent + '11' : t.bg, border: `0.5px solid ${t.border}`, cursor: 'pointer' }}
+                      onClick={() => setActiveFile(getOpenFileId(file))}>
                       <i className={`codicon ${icon}`} style={{ color, fontSize: 13 }} />
                       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
                         <p dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: t.text, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' })}>{displayFilePath(file)}</p>
                         <p style={{ fontSize: 10, color: t.textMuted, margin: 0 }}>{file.content?.split('\n').length || 0} lines</p>
                       </div>
-                      {file.name === activeFile && <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.accent, flexShrink: 0 }} />}
+                      {isOpenFileActive(file, activeFile) && <div style={{ width: 6, height: 6, borderRadius: '50%', background: t.accent, flexShrink: 0 }} />}
                     </div>
                   );
                 })

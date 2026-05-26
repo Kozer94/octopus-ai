@@ -61,7 +61,7 @@ function registerOctopusRoutes(app, {
     if (!sessions[sessionId]) sessions[sessionId] = [];
     sessions[sessionId].push({ role: 'user', content: command });
     sessions[sessionId].push({ role: 'assistant', content: response });
-    if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
+    if (sessions[sessionId].length > 8) sessions[sessionId] = sessions[sessionId].slice(-8);
   }
 
   app.get('/api/octopus/jobs/:jobId', aiLimiter, (req, res) => {
@@ -118,7 +118,7 @@ function registerOctopusRoutes(app, {
         fullCommand = fullCommand.slice(0, 8000);
 
         sessions[sessionId].push({ role: 'user', content: fullCommand });
-        if (sessions[sessionId].length > 20) sessions[sessionId] = sessions[sessionId].slice(-20);
+        if (sessions[sessionId].length > 8) sessions[sessionId] = sessions[sessionId].slice(-8);
 
         let response = await callAI([
           { role: 'system', content: systemPrompt },

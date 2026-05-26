@@ -16,7 +16,10 @@ import { useRuntimeInspector } from './hooks/useRuntimeInspector';
 import { useTerminalApprovals } from './hooks/useTerminalApprovals';
 import { useTerminalRunner } from './hooks/useTerminalRunner';
 import { useTitleMenuItems } from './hooks/useTitleMenuItems';
+import { useCommandPalette } from './hooks/useCommandPalette';
 import { useWorkspaceSearch } from './hooks/useWorkspaceSearch';
+import './styles/animations.css';
+import './styles/depth.css';
 import { filesApi } from './services/apiClient';
 import { INITIAL_CHAT_MESSAGES, octopusMessage } from './utils/chatMessages';
 import { useAutoSave } from './hooks/useAutoSave';
@@ -203,6 +206,29 @@ export default function App() {
   const diffDecorationsRef = useRef([]);
   const [sessionStartedAt] = useState(() => Date.now());
   const t = THEMES[theme];
+  const { isCommandPaletteOpen, closeCommandPalette } = useCommandPalette();
+
+  const onCommandPaletteAction = (item) => {
+    if (!item) return;
+    if (item.id === 'ai.ask') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    else if (item.id === 'ai.explain') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    else if (item.id === 'ai.refactor') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    else if (item.id === 'ai.fix') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    else if (item.id === 'ai.generate') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    else if (item.id === 'file.open') { openFolder(); }
+    else if (item.id === 'file.save') { saveCurrentFile(); }
+    else if (item.id === 'file.saveAll') { saveAllOpenFiles(); }
+    else if (item.id === 'file.new') { createScratchFile(); }
+    else if (item.id === 'view.explorer') { setActiveActivity('explorer'); setSidebarOpen(true); }
+    else if (item.id === 'view.search') { setActiveActivity('search'); setSidebarOpen(true); }
+    else if (item.id === 'view.git') { setActiveActivity('git'); setSidebarOpen(true); }
+    else if (item.id === 'view.terminal') { setTerminalOpen(true); setTerminalTab('terminal'); }
+    else if (item.id === 'view.runtime') { setRightPanelOpen(true); setRightPanelTab('runtime'); }
+    else if (item.id === 'run.start') { if (!isRunning) toggleRun(); }
+    else if (item.id === 'run.stop') { if (isRunning) toggleRun(); }
+    else if (item.id === 'run.restart') { restartProject && restartProject(); }
+    else if (item.isRecent && item.fileName) { openProjectFileByName(item.fileName); }
+  };
 
   const auditor = useLayoutAuditor({
     sidebarWidth,
@@ -287,7 +313,6 @@ export default function App() {
     setWorkflowError,
   });
 
-  function onKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }
   const { handleScan } = useProjectScan({ currentDir, refreshFileTree, setMessages });
   const activateRightPanel = (tab) => {
     setRightPanelTab(tab);
@@ -388,7 +413,6 @@ export default function App() {
       messages={messages}
       monacoRef={monacoRef}
       onFileClick={onFileClick}
-      onKey={onKey}
       openFolder={openFolder}
       projectName={projectName}
       projects={projects}
@@ -462,6 +486,9 @@ export default function App() {
       onWorkflowErrorDismiss={() => setWorkflowError(null)}
       auditResults={auditor.results}
       onAuditRun={auditor.run}
+      isCommandPaletteOpen={isCommandPaletteOpen}
+      closeCommandPalette={closeCommandPalette}
+      onCommandPaletteAction={onCommandPaletteAction}
     />
   );
 }

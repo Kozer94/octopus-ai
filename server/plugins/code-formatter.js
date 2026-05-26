@@ -1,3 +1,15 @@
+function shouldRequestFormatting(command = '') {
+  const text = String(command || '').trim();
+  if (!text) return false;
+
+  const explicitFormatRequest = /(```|<file\s+path=|تنسيق|نسق|رتب الكود|جمّل الكود|format|formatter|prettier|beautify)/i
+    .test(text);
+  const codeLikeText = /(\b(function|const|let|var|class|import|export|return|if|else|for|while)\b|<\?php|<\/?[a-z][\s\S]*>|[{;}])/i
+    .test(text);
+
+  return explicitFormatRequest || (codeLikeText && text.split(/\s+/).length > 4);
+}
+
 class CodeFormatter {
   constructor() {
     this.id = 'code-formatter';
@@ -11,6 +23,10 @@ class CodeFormatter {
     this.hooks = {
       beforeSend: async (command) => {
         try {
+          if (!shouldRequestFormatting(command)) {
+            return command;
+          }
+
           const formattingInstruction = '\n\nيرجى تنسيق الكود بشكل جميل ومنظم مع مسافات بادئة مناسبة.';
           return command + formattingInstruction;
         } catch (error) {

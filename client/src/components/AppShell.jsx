@@ -1,4 +1,5 @@
 import { ActivityBar } from './ActivityBar';
+import { CommandPalette } from './CommandPalette';
 import { DiffApprovalModal } from './DiffApprovalModal';
 import { EditorWorkspace } from './EditorWorkspace';
 import { ExplorerPanel } from './ExplorerPanel';
@@ -6,6 +7,7 @@ import { ExtensionsPanel } from './ExtensionsPanel';
 import { GitPanel } from './GitPanel';
 import { OctopusWorking } from './OctopusWorking';
 import { RightPanel } from './RightPanel';
+import { RuntimeStatusBar } from './RuntimePulse';
 import { SearchPanel } from './SearchPanel';
 import { SidebarShell } from './SidebarShell';
 import { StatusBar } from './StatusBar';
@@ -56,7 +58,6 @@ export function AppShell(props) {
     messages,
     monacoRef,
     onFileClick,
-    onKey,
     openFolder,
     onWorkflowErrorDismiss,
     projectName,
@@ -129,10 +130,13 @@ export function AppShell(props) {
     onAuditRun,
     uninstallExtension,
     workflowError,
+    isCommandPaletteOpen,
+    closeCommandPalette,
+    onCommandPaletteAction,
   } = props;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: t.bg, color: t.text, fontFamily: "'Inter', 'Segoe UI', sans-serif" }} onClick={() => menuOpen && setMenuOpen(null)}>
+    <div className={`theme-${theme}`} style={{ display: "flex", flexDirection: "column", height: "100vh", background: t.bg, color: t.text, fontFamily: "'Inter', 'Segoe UI', sans-serif", position: 'relative', overflow: 'hidden' }} onClick={() => menuOpen && setMenuOpen(null)}>
       <style>{`
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -275,13 +279,13 @@ export function AppShell(props) {
           )}
         </SidebarShell>}
 
-        <div style={{ width: 3, cursor: 'col-resize', background: 'transparent', flexShrink: 0 }}
+        <div className="resize-handle" style={{ width: 3, cursor: 'col-resize', background: 'transparent', flexShrink: 0 }}
           onMouseDown={startSidebarResize}
           onMouseEnter={e => e.currentTarget.style.background = t.accent}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
         />
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div className="elevation-1" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.025)' }}>
           <EditorWorkspace
             activeFile={activeFile}
             currentDir={currentDir}
@@ -337,7 +341,6 @@ export function AppShell(props) {
           legs={legs}
           loading={loading}
           messages={messages}
-          onKey={onKey}
           auditResults={auditResults}
           onAuditRun={onAuditRun}
           onResizeStart={startRightPanelResize}
@@ -392,6 +395,16 @@ export function AppShell(props) {
         onRunToggle={toggleRun}
         onThemeClick={() => setThemeOpen(p => !p)}
         runProcess={runProcess}
+        t={t}
+      >
+        <RuntimeStatusBar legs={legs} loading={loading} t={t} />
+      </StatusBar>
+
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={closeCommandPalette}
+        onAction={onCommandPaletteAction}
+        recentFiles={files ? files.slice(0, 5).map(f => ({ name: f.name })) : []}
         t={t}
       />
     </div>

@@ -1,6 +1,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { filesApi } from '../services/apiClient';
+import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
 
 /**
  * Auto-Save Hook
@@ -29,8 +30,8 @@ export function useAutoSave({
     });
   }, [files]);
 
-  const isFileDirty = useCallback((fileName) => {
-    const file = files.find(f => f.name === fileName);
+  const isFileDirty = useCallback((fileId) => {
+    const file = files.find(f => getOpenFileId(f) === fileId || f.name === fileId);
     if (!file?.path || file.content === undefined) return false;
     const lastSaved = lastSavedContentRef.current.get(file.path);
     return lastSaved !== undefined ? file.content !== lastSaved : false;
@@ -82,27 +83,27 @@ export function useAutoSave({
   }, [files]);
 
   // تحذير قبل إغلاق ملف متسخ
-  const confirmCloseFile = useCallback((fileName) => {
-    if (isFileDirty(fileName)) {
-      const file = files.find(f => f.name === fileName);
-      const name = file?.name || fileName;
+  const confirmCloseFile = useCallback((fileId) => {
+    if (isFileDirty(fileId)) {
+      const file = files.find(f => getOpenFileId(f) === fileId || f.name === fileId);
+      const name = file?.name || fileId;
       return window.confirm(`"${name}" has unsaved changes. Close anyway?`);
     }
     return true;
   }, [isFileDirty, files]);
 
   // إغلاق ملف مع تحقق
-  const closeFileWithConfirm = useCallback((fileName) => {
-    if (!confirmCloseFile(fileName)) return false;
+  const closeFileWithConfirm = useCallback((fileId) => {
+    if (!confirmCloseFile(fileId)) return false;
 
-    const remaining = files.filter(f => f.name !== fileName);
+    const remaining = files.filter(f => getOpenFileId(f) !== fileId && f.name !== fileId);
     setFiles(remaining);
-    if (activeFile === fileName) {
-      setActiveFile(remaining.length > 0 ? remaining[remaining.length - 1].name : '');
+    if (activeFile === fileId || files.some(file => isOpenFileActive(file, activeFile) && (getOpenFileId(file) === fileId || file.name === fileId))) {
+      setActiveFile(getOpenFileId(remaining[remaining.length - 1]));
     }
 
     // حذف من التتبع
-    const file = files.find(f => f.name === fileName);
+    const file = files.find(f => getOpenFileId(f) === fileId || f.name === fileId);
     if (file?.path) lastSavedContentRef.current.delete(file.path);
 
     return true;

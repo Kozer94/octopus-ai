@@ -1,0 +1,408 @@
+
+/* ═══════════════════════════════════════════════════════════════
+   OCTOPUS AI — Micro-Animations & Interaction System
+   hover states · active glow · micro-animations · runtime pulse
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Activity Bar Micro-Animations ────────────────────────── */
+.activity-btn {
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.activity-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%) scaleY(0);
+  width: 2px;
+  height: 60%;
+  border-radius: 0 2px 2px 0;
+  background: var(--activity-indicator, #58a6ff);
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+}
+
+.activity-btn:hover::before {
+  transform: translateY(-50%) scaleY(0.5);
+  opacity: 0.6;
+}
+
+.activity-btn.active::before {
+  transform: translateY(-50%) scaleY(1);
+  opacity: 1;
+}
+
+.activity-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(circle at center, currentColor 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.activity-btn:hover::after {
+  opacity: 0.04;
+}
+
+.activity-btn.active::after {
+  opacity: 0.06;
+}
+
+.activity-btn .codicon {
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.15s ease;
+}
+
+.activity-btn:hover .codicon {
+  transform: scale(1.12);
+}
+
+.activity-btn:active .codicon {
+  transform: scale(0.95);
+}
+
+.activity-btn.active .codicon {
+  transform: scale(1.05);
+}
+
+/* ── Activity Glow Indicator ─────────────────────────────── */
+.activity-glow {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--activity-indicator, #58a6ff);
+  box-shadow: 0 0 6px var(--activity-indicator, #58a6ff), 0 0 12px var(--activity-indicator, #58a6ff);
+  opacity: 0;
+  transition: opacity 0.3s ease, height 0.3s ease;
+}
+
+.activity-btn.active .activity-glow {
+  opacity: 1;
+  height: 16px;
+  border-radius: 2px;
+}
+
+/* ── Runtime Pulse ───────────────────────────────────────── */
+@keyframes runtimePulse {
+  0% { box-shadow: 0 0 0 0 rgba(240, 136, 62, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(240, 136, 62, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(240, 136, 62, 0); }
+}
+
+@keyframes runtimePulseCore {
+  0%, 100% { 
+    transform: scale(1); 
+    filter: brightness(1);
+  }
+  50% { 
+    transform: scale(1.03); 
+    filter: brightness(1.15);
+  }
+}
+
+@keyframes runtimeBreathe {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes executionTrace {
+  0% { stroke-dashoffset: 20; opacity: 0.3; }
+  50% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: -20; opacity: 0.3; }
+}
+
+.runtime-pulse {
+  animation: runtimePulse 2s ease-in-out infinite;
+}
+
+.runtime-breathe {
+  animation: runtimePulseCore 3s ease-in-out infinite;
+}
+
+.runtime-node {
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.runtime-node.active {
+  animation: runtimePulse 2s ease-in-out infinite;
+}
+
+.runtime-node.active::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid rgba(240, 136, 62, 0.3);
+  animation: runtimeBreathe 1.5s ease-in-out infinite;
+}
+
+/* ── Execution Trace Lines ───────────────────────────────── */
+.trace-line {
+  stroke-dasharray: 6 4;
+  animation: executionTrace 2s linear infinite;
+}
+
+.trace-line.active {
+  stroke: rgba(240, 136, 62, 0.6);
+  stroke-width: 0.4;
+}
+
+/* ── Spatial Node Hover ──────────────────────────────────── */
+.spatial-node {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform, box-shadow;
+}
+
+.spatial-node:hover {
+  transform: translate(-50%, -50%) scale(1.08);
+  z-index: 10;
+}
+
+.spatial-node:active {
+  transform: translate(-50%, -50%) scale(0.97);
+}
+
+/* ── Focus Ring Card Hover ───────────────────────────────── */
+.focus-ring-card {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.focus-ring-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: transparent;
+  transition: background 0.2s ease, width 0.2s ease;
+  border-radius: 0 1px 1px 0;
+}
+
+.focus-ring-card:hover {
+  border-color: rgba(88, 166, 255, 0.3);
+  background: rgba(88, 166, 255, 0.04);
+  transform: translateX(2px);
+}
+
+.focus-ring-card:hover::before {
+  background: var(--card-accent, #58a6ff);
+  width: 3px;
+}
+
+/* ── Tab Bar Micro-Animations ────────────────────────────── */
+.editor-tab {
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.editor-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s ease, height 0.2s ease;
+}
+
+.editor-tab.active::after {
+  background: var(--tab-indicator, #58a6ff);
+  height: 2px;
+}
+
+.editor-tab:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.editor-tab .tab-close {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.15s ease;
+}
+
+.editor-tab:hover .tab-close {
+  opacity: 0.6;
+  transform: scale(1);
+}
+
+.editor-tab .tab-close:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+}
+
+/* ── Resize Handle ───────────────────────────────────────── */
+.resize-handle {
+  transition: background 0.2s ease, width 0.15s ease;
+  position: relative;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 1;
+}
+
+.resize-handle:hover {
+  background: rgba(88, 166, 255, 0.3) !important;
+  width: 4px !important;
+}
+
+.resize-handle:active {
+  background: rgba(88, 166, 255, 0.5) !important;
+  width: 5px !important;
+}
+
+/* ── Status Bar Pulse ────────────────────────────────────── */
+@keyframes statusPulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.status-runtime-indicator {
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+/* ── Workflow Error Shake ────────────────────────────────── */
+@keyframes errorShake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.workflow-error-bar {
+  animation: errorShake 0.5s ease-in-out;
+}
+
+/* ── Command Palette Animations ──────────────────────────── */
+@keyframes commandPaletteIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes commandPaletteOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes backdropFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes searchGlow {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(88,166,255,0.2), 0 4px 20px rgba(0,0,0,0.3); }
+  50% { box-shadow: 0 0 0 1px rgba(88,166,255,0.4), 0 4px 24px rgba(0,0,0,0.35), 0 0 30px rgba(88,166,255,0.08); }
+}
+
+.command-palette-overlay {
+  animation: backdropFadeIn 0.15s ease-out;
+}
+
+.command-palette-container {
+  animation: commandPaletteIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.command-palette-exit {
+  animation: commandPaletteOut 0.12s ease-in forwards;
+}
+
+.command-palette-search {
+  animation: searchGlow 3s ease-in-out infinite;
+}
+
+/* ── Octopus Core Enhanced ───────────────────────────────── */
+@keyframes coreOrbitEnhanced {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes coreGlow {
+  0%, 100% { 
+    box-shadow: 0 0 0 12px rgba(13,17,23,0.6), 0 0 20px rgba(88,166,255,0.05);
+  }
+  50% { 
+    box-shadow: 0 0 0 12px rgba(13,17,23,0.6), 0 0 30px rgba(88,166,255,0.12);
+  }
+}
+
+.core-ring {
+  animation: coreOrbitEnhanced 18s linear infinite, coreGlow 4s ease-in-out infinite;
+}
+
+/* ── Smooth Transitions for Panels ───────────────────────── */
+.panel-slide-in {
+  animation: depthSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.panel-expand {
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.15s ease,
+              box-shadow 0.2s ease;
+}
+
+/* ── Tooltip Micro-animation ─────────────────────────────── */
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(2px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.tooltip-animated {
+  animation: tooltipIn 0.12s ease-out;
+}
+
+/* ── Reduced Motion ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .activity-btn::before,
+  .activity-btn::after,
+  .activity-btn .codicon,
+  .spatial-node,
+  .focus-ring-card,
+  .focus-ring-card::before,
+  .editor-tab,
+  .editor-tab::after,
+  .editor-tab .tab-close,
+  .resize-handle,
+  .runtime-pulse,
+  .runtime-breathe,
+  .runtime-node,
+  .runtime-node.active::after,
+  .trace-line,
+  .core-ring,
+  .panel-slide-in,
+  .command-palette-overlay,
+  .command-palette-container,
+  .command-palette-search,
+  .workflow-error-bar,
+  .status-runtime-indicator {
+    animation: none !important;
+    transition: none !important;
+  }
+}

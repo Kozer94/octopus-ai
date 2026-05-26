@@ -5,6 +5,23 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-26 21:05:00 +03] system:fix `client/src/utils/monacoThemes.js` و`client/src/config/uiConfig.js` - إضافة ثيم Monaco مخصص لـ Solarized وربطه بدل `vs-dark` حتى لا يظهر المحرر بخلفية سوداء داخل واجهة Solarized.
+- [2026-05-26 20:58:00 +03] system:fix `client/src/main.jsx` و`client/src/components/EditorWorkspace.jsx` و`client/src/utils/editorLanguage.js` - تثبيت تحميل Monaco محلياً عبر `loader.config({ monaco })` ومنع تعليق المحرر على ملفات SQLite/binary بعرض رسالة واضحة بدل `Loading...`.
+- [2026-05-26 20:25:00 +03] system:ui `client/src/styles/depth.css` و`client/src/components/ActivityBar.jsx` و`client/src/components/SidebarShell.jsx` - بدء مرحلة Visual Depth بتفعيل طبقات العمق وربط glow/hover micro-interactions في الشريط الأيسر مع تنظيف lint الخاص بـ Command Palette وRuntime Pulse.
+- [2026-05-26 20:05:00 +03] system:fix `client/src/utils/openFileIdentity.js` و`client/src/hooks/useProjectWorkspace.js` و`client/src/components/EditorWorkspace.jsx` - توحيد هوية الملفات المفتوحة على `path || name` حتى يظهر محتوى Monaco عند فتح ملفات لها أسماء مكررة أو مسارات كاملة.
+- [2026-05-26 19:15:00 +03] system:ui `client/src/components/RightPanel.jsx` - إزالة اقتراحات بداية الشات About/Explain/Question/Fix/Add tests لتصبح لوحة الشات أنظف.
+- [2026-05-26 19:10:00 +03] system:ui `client/src/components/RightPanel.jsx` - إزالة عبارة Start with a focused command من بداية الشات لتخفيف النصوص الزائدة.
+- [2026-05-26 19:05:00 +03] system:ui `client/src/components/RightPanel.jsx` و`client/src/hooks/useResizableLayout.js` - إزالة تبويب Command Deck الزائد وإرجاع اللوحة اليمنى لتبدأ من الشات مع إبقاء تحسينات Economy داخل الشات.
+- [2026-05-26 18:55:00 +03] system:ui `client/src/components/RightPanel.jsx` و`client/src/utils/octopusPromptContext.js` - إضافة مؤشر Economy داخل الشات يوضح قبل الإرسال هل الرد محلي أو AI خفيف أو AI مع سياق المشروع مع prompt سريع عن هوية Octopus.
+- [2026-05-26 18:45:00 +03] system:performance `client/src/utils/octopusPromptContext.js` و`client/src/hooks/useOctopusWorkflow.js` و`server/routes/octopus.js` - إضافة Economy mode بردود محلية لهوية Octopus ومنع إرسال سياق الملفات للأسئلة العامة وتقليل history المرسل للـ AI.
+- [2026-05-26 18:35:00 +03] system:fix `client/src/config/uiConfig.js` - رفع تباين ألوان `textMuted` في الثيمات لإغلاق إنذار LOW_COLOR_CONTRAST المتبقي في Engineer HUD.
+- [2026-05-26 18:05:00 +03] system:fix `server/services/octopusConfig.js` و`client/src/utils/diffUtils.js` - تثبيت هوية مطور Octopus AI باسم ئامانج صالحي/كوزر وتوثيق وقت التطوير بأسبوع 24-30 مايو 2026 ومنع نسب المشروع لشركات أخرى مع توسيع تنظيف الحروف غير المفهومة.
+- [2026-05-26 17:55:00 +03] system:fix `client/src/utils/diffUtils.js` و`server/services/octopusConfig.js` - تنظيف ردود الشات من حروف CJK غير المفهومة ومنع النموذج من خلط لغات غير العربية والإنجليزية التقنية.
+- [2026-05-26 17:45:00 +03] system:fix `client/src/utils/octopusPromptContext.js` و`client/src/components/RightPanel.jsx` - منع الأسئلة العامة الطويلة من دخول مسار خطة التنفيذ وتحسين تصنيف ردود الشات حتى لا تظهر كـ Terminal إلا عند وجود أمر فعلي.
+- [2026-05-26 17:35:00 +03] system:fix `server/plugins/code-formatter.js` و`server/services/octopusConfig.js` - منع إضافة تعليمات تنسيق الكود على التحيات والرسائل العامة وتقوية سلوك Octopus كشريك هندسي وفلسفي في وضع الاستجواب.
+- [2026-05-26 17:22:00 +03] system:feature `client/src/components/RightPanel.jsx` و`client/src/hooks/useOctopusWorkflow.js` - إضافة Inquiry/Socratic mode للشات ليعمل كشريك استجواب هندسي وفلسفي مع تغليف فعلي للرسائل قبل الإرسال.
+- [2026-05-26 17:14:00 +03] system:ui `client/src/components/RightPanel.jsx` - تطوير Chat 2.0 بإضافة تصنيف بصري للرسائل وأزرار Copy/Explain/HUD وشريط سياق وأوضاع prompt.
+- [2026-05-26 17:02:00 +03] system:feature `client/src/components/RightPanel.jsx` و`client/src/hooks/useResizableLayout.js` - إضافة Octopus Command Deck كتَبويب افتراضي يعرض المهمة الحالية والقرارات المعلقة وحالة الأرجل وإشارات runtime.
 - [2026-05-26 16:48:00 +03] system:ui `client/src/components/EditorWorkspace.jsx` - إخفاء شريط مسار الملف الفارغ حتى يتم فتح ملف فعلي في المحرر.
 - [2026-05-26 16:42:00 +03] system:fix `client/src/config/uiConfig.js` - رفع تباين `textMuted` في ثيم Solarized لإغلاق آخر إنذار LOW_COLOR_CONTRAST في Engineer HUD.
 - [2026-05-26 16:36:00 +03] system:fix `client/src/auditor/domAuditRules.js` وحقول الإدخال - تقليل false positives في Engineer HUD بإضافة aria-label/autocomplete وفصل chrome microcopy عن مشاكل DOM الحقيقية.
