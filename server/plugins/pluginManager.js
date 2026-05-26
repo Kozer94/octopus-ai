@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { hudLog, hudPluginUpdate } = require('../hud-ws');
 
 function normalizeHookCallbacks(callbacks) {
   if (!callbacks) return [];
@@ -53,9 +54,13 @@ class PluginManager {
       }
 
       console.log(`✅ Plugin loaded: ${normalizedPlugin.name} v${normalizedPlugin.version}`);
+      hudLog('plug', `Plugin loaded: ${normalizedPlugin.name} v${normalizedPlugin.version}`);
+      hudPluginUpdate(normalizedPlugin.id || normalizedPlugin.name, 'ok');
       return true;
     } catch (error) {
       console.error(`❌ Failed to load plugin ${plugin.id}:`, error);
+      hudLog('err', `Plugin failed: ${plugin.id} - ${error.message}`);
+      hudPluginUpdate(plugin.id || plugin.name, 'error', error.message);
       return false;
     }
   }
@@ -192,7 +197,7 @@ class PluginManager {
   async loadPluginsFromDirectory(dir) {
     try {
       const files = fs.readdirSync(dir);
-      const pluginFiles = files.filter(f => f.endsWith('.js') && f !== 'basePlugin.js' && f !== 'pluginManager.js' && f !== 'marketplace.js');
+      const pluginFiles = files.filter(f => f.endsWith('-plugin.js'));
 
       for (const file of pluginFiles) {
         try {
@@ -210,10 +215,13 @@ class PluginManager {
           }
         } catch (error) {
           console.error(`Failed to load plugin from ${file}:`, error);
+          hudLog('err', `Plugin failed: ${file} - ${error.message}`);
+          hudPluginUpdate(file, 'error', error.message);
         }
       }
     } catch (error) {
       console.error('Failed to load plugins from directory:', error);
+      hudLog('err', `Plugin directory load failed: ${error.message}`);
     }
   }
 

@@ -284,6 +284,7 @@ export function AppShell(props) {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <EditorWorkspace
             activeFile={activeFile}
+            currentDir={currentDir}
             currentFile={currentFile}
             displayFilePath={displayFilePath}
             editorRef={editorRef}
@@ -292,6 +293,7 @@ export function AppShell(props) {
             isExtensionInstalled={isExtensionInstalled}
             loadingFiles={loadingFiles}
             monacoRef={monacoRef}
+            projectName={projectName}
             selectedExtension={selectedExtension}
             setActiveFile={setActiveFile}
             setFiles={setFiles}

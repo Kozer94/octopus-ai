@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "concurrently \"cd client && npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "dev": "concurrently -k -n server,client,electron \"node server/supervisor.js\" \"cd client && npm run dev\" \"wait-on http://localhost:5173 http://localhost:3001/api/health && electron .\"",
     "test": "cd server && npm test && cd ../client && npm test",
     "lint": "cd client && npm run lint",
     "build": "cd client && npm run build",

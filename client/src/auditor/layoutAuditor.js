@@ -73,9 +73,9 @@ const LAYOUT_RULES = [
     description: 'عنصر نصي بدون dir="auto" أو unicode-bidi',
     check: ({ textElements }) => {
       const issues = textElements.filter(el => {
-        const hasDir = el.hasAttribute('dir');
-        const hasBidi = el.style?.unicodeBidi;
-        const text = el.textContent || '';
+        const hasDir = el.hasAttribute('dir') || !!el.closest('[dir]');
+        const hasBidi = hasBidiIsolation(el);
+        const text = getAuditableText(el);
         const hasRTL = /[֐-ࣿיִ-﷿ﹰ-ﻼ]/.test(text);
         return hasRTL && !hasDir && !hasBidi;
       });
@@ -99,11 +99,10 @@ const LAYOUT_RULES = [
         const computed = getComputedStyle(el);
         const parentComputed = el.parentElement ? getComputedStyle(el.parentElement) : null;
         const isInline = computed.display === 'inline' || computed.display === 'inline-block';
-        const hasOverflow = computed.overflow === 'hidden' || computed.overflow === 'auto' || computed.overflowX === 'hidden';
-        const hasEllipsis = computed.textOverflow === 'ellipsis';
-        const isLong = (el.textContent || '').length > 30;
+        const hasOverflowControl = hasTextOverflowControl(el);
+        const isLong = getAuditableText(el).length > 30;
         const inFlexOrGrid = parentComputed?.display === 'flex' || parentComputed?.display === 'grid';
-        return isLong && inFlexOrGrid && !hasOverflow && !hasEllipsis && !isInline;
+        return isLong && inFlexOrGrid && !hasOverflowControl && !isInline;
       });
       if (issues.length > 0) {
         return {
@@ -425,15 +424,61 @@ function detectRTLCodeBlocks(textElements) {
   const CODE_PATTERN = /[{}();=<>/]/;
   const issues = [];
   for (const el of textElements) {
-    const text = el.textContent || '';
+    const text = getAuditableText(el);
     if (RTL_PATTERN.test(text) && CODE_PATTERN.test(text)) {
       const style = el.style || {};
-      const hasLTR = style.direction === 'ltr' || style.unicodeBidi === 'embed' || style.unicodeBidi === 'bidi-override';
+      const computed = getComputedStyle(el);
+      const bidi = style.unicodeBidi || computed.unicodeBidi;
+      const hasLTR = style.direction === 'ltr' ||
+        computed.direction === 'ltr' ||
+        bidi === 'embed' ||
+        bidi === 'bidi-override' ||
+        bidi === 'plaintext' ||
+        bidi === 'isolate' ||
+        bidi === 'isolate-override';
       if (!hasLTR) issues.push(el);
     }
     if (issues.length >= 10) break;
   }
   return issues;
+}
+
+function getDirectText(el) {
+  return Array.from(el.childNodes || [])
+    .filter(node => node.nodeType === Node.TEXT_NODE)
+    .map(node => node.textContent || '')
+    .join(' ')
+    .trim();
+}
+
+function getAuditableText(el) {
+  const directText = getDirectText(el);
+  if (directText) return directText;
+  return el.children.length === 0 ? (el.textContent || '').trim() : '';
+}
+
+function hasBidiIsolation(el) {
+  const computed = getComputedStyle(el);
+  const inline = el.style || {};
+  const bidi = inline.unicodeBidi || computed.unicodeBidi;
+  return !!inline.unicodeBidi ||
+    bidi === 'isolate' ||
+    bidi === 'plaintext' ||
+    bidi === 'embed' ||
+    bidi === 'bidi-override' ||
+    bidi === 'isolate-override';
+}
+
+function hasTextOverflowControl(el) {
+  const computed = getComputedStyle(el);
+  return computed.overflow === 'hidden' ||
+    computed.overflow === 'auto' ||
+    computed.overflowX === 'hidden' ||
+    computed.textOverflow === 'ellipsis' ||
+    computed.wordBreak === 'break-word' ||
+    computed.overflowWrap === 'break-word' ||
+    computed.overflowWrap === 'anywhere' ||
+    computed.whiteSpace === 'pre-wrap';
 }
 
 // ═══════════════════════════════════════════
@@ -448,7 +493,7 @@ export function collectLayoutState() {
 
   // جمع بيانات من DOM
   const textElements = Array.from(document.querySelectorAll('span, p, div'))
-    .filter(el => el.textContent && el.textContent.trim().length > 0)
+    .filter(el => getAuditableText(el).length > 0)
     .slice(0, 200); // حد أقصى للأداء
 
   const modalElements = Array.from(document.querySelectorAll('[style*="position: fixed"]'))

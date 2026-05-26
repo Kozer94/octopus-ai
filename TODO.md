@@ -5,6 +5,23 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-26 16:48:00 +03] system:ui `client/src/components/EditorWorkspace.jsx` - إخفاء شريط مسار الملف الفارغ حتى يتم فتح ملف فعلي في المحرر.
+- [2026-05-26 16:42:00 +03] system:fix `client/src/config/uiConfig.js` - رفع تباين `textMuted` في ثيم Solarized لإغلاق آخر إنذار LOW_COLOR_CONTRAST في Engineer HUD.
+- [2026-05-26 16:36:00 +03] system:fix `client/src/auditor/domAuditRules.js` وحقول الإدخال - تقليل false positives في Engineer HUD بإضافة aria-label/autocomplete وفصل chrome microcopy عن مشاكل DOM الحقيقية.
+- [2026-05-26 16:30:00 +03] system:fix `server/plugins/examplePlugin.js` و`server/plugins/pluginManager.js` - إصلاح require للـ basePlugin داخل sandbox ومنع تكرار تحميل plugins بين simple runtime وclass plugin manager.
+- [2026-05-26 16:18:00 +03] system:feature `server/routes/hud.js` و`client/public/dev-hud.js` و`client/src/auditor/domAuditRules.js` - إضافة AI Fix proposal للـ Engineer HUD يرسل issue وأمثلة DOM للـ AI ويعرض patch مقترح بدون تطبيق تلقائي.
+- [2026-05-26 16:05:00 +03] system:feature `server/hud-ws.js` و`client/src/hud/hud-ws-client.js` و`client/public/dev-hud.html` - إضافة WebSocket live logs للـ Engineer HUD على port 3002 مع plugin/provider updates.
+- [2026-05-26 15:50:00 +03] system:fix `client/public/dev-hud.html` و`client/src/auditor/domAuditRules.js` - إضافة `data-hud` واستثناء عناصر HUD من DOM Audit لتقليل false positives.
+- [2026-05-26 15:42:00 +03] system:fix `client/public/dev-hud.js` و`client/public/dev-hud.css` - تقليل تجمد Engineer HUD عبر cache لذاكرة المشاكل ومنع تشغيل DOM audit متكرر أثناء التنفيذ.
+- [2026-05-26 15:35:00 +03] system:dev `package.json` - توحيد تشغيل server وclient وElectron داخل أمر واحد عبر `npm run dev`.
+- [2026-05-26 15:28:00 +03] system:fix `client/public/dev-hud.js` و`client/src/auditor/layoutAuditor.js` و`client/src/auditor/domAuditRules.js` - تنظيف Engineer Queue بإخفاء المشاكل cleared وتقليل false positives في فحص text overflow وcontrast.
+- [2026-05-26 15:20:00 +03] system:feature `client/public/dev-hud.*` - تحويل Dev HUD إلى Engineer HUD يحفظ ذاكرة المشاكل ويميز new/seen/returned/cleared مع إجراءات Mark Seen وMark Fixed وCopy Fix.
+- [2026-05-26 15:12:00 +03] system:fix `client/src/auditor/layoutAuditor.js` و`client/src/auditor/useLayoutAuditor.js` - تقليل إنذارات auditor الخاطئة عبر قبول bidi/overflow المحسوب ومنع تكرار نفس التقرير في الكونسول.
+- [2026-05-26 15:05:00 +03] system:feature `client/src/auditor/domAuditRules.js` و`client/public/dev-hud.*` - إضافة DOM Audit Rules مع تشغيل يدوي من HUD ودعم Auto-Fix عبر BroadcastChannel.
+- [2026-05-26 14:58:00 +03] system:ui `client/src/components/RightPanel.jsx` - إضافة زر HUD مباشر في الشريط اليميني لفتح Dev HUD بدون الحاجة لدخول تبويب Audit.
+- [2026-05-26 14:55:00 +03] system:ui `client/src/auditor/AuditorPanel.jsx` - إضافة زر HUD داخل تبويب Audit لفتح Dev HUD بنفس origin الحالي وعرض أخطاء الفحص.
+- [2026-05-26 14:48:00 +03] system:fix `client/src/auditor/useLayoutAuditor.js` و`client/public/dev-hud.*` - استرجاع Dev HUD لعرض أخطاء layout عبر localStorage وBroadcastChannel في وضع التطوير.
+- [2026-05-26 14:40:00 +03] system:ui `client/src/components/EditorWorkspace.jsx` - بدء تنفيذ Octopus Spatial Workspace بخريطة عقد للمشروع وحلقة تركيز للملفات في شاشة البداية.
 - [2026-05-26 14:25:00 +03] system:ui `client/src/components/ActivityBar.jsx` و`client/src/components/EditorWorkspace.jsx` - نقل Terminal وScan Project إلى الشريط الجانبي الأيسر بجانب زر Open Folder وإرجاع شاشة الترحيب للاختصارات.
 - [2026-05-26 14:18:00 +03] system:ui `client/src/components/EditorWorkspace.jsx` و`client/src/components/RightPanel.jsx` - نقل أزرار Terminal وScan Project من أسفل الشات إلى شاشة الترحيب بجانب Open Folder.
 - [2026-05-26 14:10:00 +03] system:ui `main.js` و`preload.js` و`client/src/components/TitleBar.jsx` - إضافة أزرار نافذة مخصصة للإغلاق والتصغير والتكبير داخل شريط العنوان مع إبقاء عناصر المينيو no-drag.

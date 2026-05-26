@@ -114,6 +114,14 @@ export function RightPanel({
           </button>
         ))}
         <div style={{ flex: 1 }} />
+        <button title="Open Dev HUD"
+          style={{ width: 32, height: 32, background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => window.open('/dev-hud.html', 'octopus-dev-hud', 'width=980,height=720')}
+          onMouseEnter={e => e.currentTarget.style.background = t.border + '66'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          <i className="codicon codicon-open-preview" style={{ color: t.textMuted, fontSize: 16 }} />
+        </button>
         <button title="Clear Chat"
           style={{ width: 32, height: 32, background: 'transparent', border: 'none', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}
           onClick={reset}
@@ -213,6 +221,7 @@ export function RightPanel({
             <div style={{ padding: "8px 10px", borderTop: `0.5px solid ${t.border}`, background: t.bg }}>
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 8, padding: '6px 8px' }}>
                 <textarea
+                  aria-label="Command input"
                   style={{ flex: 1, background: 'transparent', color: t.text, border: 'none', outline: 'none', fontSize: 12, resize: 'none', fontFamily: "'Inter', 'Segoe UI', sans-serif", lineHeight: 1.5 }}
                   value={input}
                   onChange={e => setInput(e.target.value)}

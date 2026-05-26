@@ -55,6 +55,8 @@ const { registerOctopusRoutes } = require('./routes/octopus');
 const { registerEventRoutes } = require('./routes/events');
 const { registerRuntimeRoutes } = require('./routes/runtime');
 const { registerScanRoutes } = require('./routes/scan');
+const { registerHudRoutes } = require('./routes/hud');
+const { initHudWS, hudLog, hudPluginUpdate } = require('./hud-ws');
 
 // Simple Plugin System - Module Exports Style
 const pluginsDir = path.join(__dirname, 'plugins');
@@ -140,6 +142,14 @@ const simplePluginRuntime = createSimplePluginRuntime({
   loadedPlugins,
   pluginsState,
   loadPluginsState,
+  onPluginFailed: (file, error) => {
+    hudLog('err', `Plugin failed: ${file} - ${error.message}`);
+    hudPluginUpdate(file, 'error', error.message);
+  },
+  onPluginLoaded: plugin => {
+    hudLog('plug', `Plugin loaded: ${plugin.name} v${plugin.version || '1.0.0'}`);
+    hudPluginUpdate(plugin.id || plugin.name, 'ok');
+  },
 });
 const { executeHook, getEnabledPlugins, loadSimplePlugins } = simplePluginRuntime;
 
@@ -196,9 +206,12 @@ registerMarketplaceRoutes(app, { marketplace, pluginManager });
 registerEventRoutes(app, { eventBus });
 registerRuntimeRoutes(app, { eventBus, taskRuntime });
 registerScanRoutes(app);
+registerHudRoutes(app, { callAI, rootDir: path.join(__dirname, '..') });
 
 const server = app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);
+  initHudWS();
+  hudLog('ok', `Server started on http://localhost:${PORT}`);
   eventBus.publish('server.started', { port: Number(PORT) }, { category: 'system', source: 'server' });
   
   // تحميل الإضافات البسيطة (module.exports style)

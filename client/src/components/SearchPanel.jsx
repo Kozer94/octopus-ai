@@ -20,6 +20,8 @@ export function SearchPanel({
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
         <input
+          aria-label="Search in files"
+          autoComplete="off"
           style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none' }}
           placeholder="Search in files..."
           value={searchQuery}

@@ -136,6 +136,8 @@ export function TitleBar({
           <i className="codicon codicon-search" style={{ color: t.textMuted, fontSize: 13, flexShrink: 0 }} />
           <input
             ref={searchInputRef}
+            aria-label="Search files and commands"
+            autoComplete="off"
             style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: t.text, fontSize: 12, fontFamily: "'Inter', 'Segoe UI', sans-serif" }}
             placeholder="Search files, commands..."
             value={searchQuery}

@@ -67,6 +67,8 @@ function createSimplePluginRuntime({
   pluginsState = {},
   loadPluginsState,
   logger = console,
+  onPluginFailed,
+  onPluginLoaded,
 }) {
   function loadSimplePlugins() {
     loadPluginsState();
@@ -85,9 +87,11 @@ function createSimplePluginRuntime({
         plugin.initialize?.();
         loadedPlugins.push(plugin);
         logger.log(`🔌 Loaded plugin: ${plugin.name} (${plugin.id}) - ${plugin.enabled ? 'enabled' : 'disabled'}`);
+        onPluginLoaded?.(plugin);
         registerPluginRoutes(app, plugin, logger);
       } catch (error) {
         logger.error(`❌ Failed to load plugin ${file}:`, error.message);
+        onPluginFailed?.(file, error);
       }
     }
 

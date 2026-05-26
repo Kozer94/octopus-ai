@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Octopus Engineer HUD</title>
+    <link rel="stylesheet" href="/dev-hud.css" />
+  </head>
+  <body>
+    <main class="hud-shell" data-hud>
+      <header class="hud-header">
+        <div>
+          <p class="eyebrow">Octopus Engineer HUD</p>
+          <h1>Runtime Issue Desk</h1>
+        </div>
+        <div class="actions">
+          <span id="ai-status" class="badge offline">Live logs reconnecting</span>
+          <button id="domAuditBtn" type="button">Run DOM Audit</button>
+          <button id="domFixBtn" type="button">Run + Auto-Fix</button>
+          <button id="refreshBtn" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <section class="stats">
+        <article>
+          <span id="passedCount">0</span>
+          <p>Passed</p>
+        </article>
+        <article class="critical">
+          <span id="criticalCount">0</span>
+          <p>Critical</p>
+        </article>
+        <article class="major">
+          <span id="majorCount">0</span>
+          <p>Major</p>
+        </article>
+        <article class="minor">
+          <span id="minorCount">0</span>
+          <p>Minor</p>
+        </article>
+      </section>
+
+      <section class="meta">
+        <span id="lastScan">Waiting for audit...</span>
+        <span id="viewport">Viewport unknown</span>
+      </section>
+
+      <section class="engineer-section">
+        <div class="section-title">
+          <span>Engineer Queue</span>
+          <span id="engineerSummary">Waiting</span>
+        </div>
+        <div id="engineerIssues" class="issues"></div>
+      </section>
+
+      <section class="dom-section">
+        <div class="section-title">
+          <span>DOM Audit Rules</span>
+          <span id="domSummary">Waiting</span>
+        </div>
+        <div id="domIssues" class="issues"></div>
+      </section>
+
+      <section id="issues" class="issues"></section>
+
+      <section class="logs-section">
+        <div class="section-title">
+          <span>Server Logs</span>
+          <span>ws://localhost:3002</span>
+        </div>
+        <div id="log-list" class="log-list"></div>
+      </section>
+    </main>
+    <script type="module" src="/dev-hud.js"></script>
+    <script type="module" src="/src/hud/hud-ws-client.js"></script>
+  </body>
+</html>

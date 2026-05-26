@@ -3,7 +3,7 @@
  * إضافة مثال توضح كيفية إنشاء إضافة جديدة
  */
 
-const BasePlugin = require('./basePlugin');
+const BasePlugin = require('./basePlugin.js');
 
 class ExamplePlugin extends BasePlugin {
   constructor() {

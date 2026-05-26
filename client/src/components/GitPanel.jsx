@@ -17,6 +17,8 @@ export function GitPanel({
           <i className="codicon codicon-refresh" style={{ fontSize: 12 }} /> Refresh
         </button>
         <input
+          aria-label="Commit message"
+          autoComplete="off"
           style={{ width: '100%', background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: '5px 10px', color: t.text, fontSize: 12, outline: 'none', marginBottom: 6 }}
           placeholder="Commit message..."
           value={commitMsg}

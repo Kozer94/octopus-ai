@@ -1,5 +1,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { runDomAudit } from './domAuditRules';
 import { collectLayoutState, formatAuditReport, runLayoutAudit } from './layoutAuditor';
 
 const isDevelopment = import.meta.env?.MODE === 'development';
@@ -17,6 +18,46 @@ export function useLayoutAuditor(layoutState) {
   const [results, setResults] = useState([]);
   const [lastRun, setLastRun] = useState(null);
   const autoIntervalRef = useRef(null);
+  const hudChannelRef = useRef(null);
+  const latestHudPayloadRef = useRef(null);
+  const reportSignatureRef = useRef('');
+
+  useEffect(() => {
+    if (!isDevelopment || typeof BroadcastChannel === 'undefined') return;
+
+    try {
+      const channel = new BroadcastChannel('octopus-audit-hud');
+      hudChannelRef.current = channel;
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'audit-request' && latestHudPayloadRef.current) {
+          channel.postMessage({ type: 'audit-update', payload: latestHudPayloadRef.current });
+        }
+        if (event.data?.type === 'dom-audit-request') {
+          const domAudit = runDomAudit({ autoFix: event.data.autoFix === true });
+          const payload = {
+            ...domAudit,
+            lastRun: Date.now(),
+            lastScan: new Date().toLocaleTimeString(),
+            viewportWidth: window.innerWidth,
+            viewportHeight: window.innerHeight,
+          };
+
+          try {
+            localStorage.setItem('octopus-dom-audit-hud', JSON.stringify(payload));
+          } catch { /* ignore HUD persistence failures */ }
+
+          channel.postMessage({ type: 'dom-audit-update', payload });
+        }
+      };
+
+      return () => {
+        channel.close();
+        if (hudChannelRef.current === channel) hudChannelRef.current = null;
+      };
+    } catch {
+      return undefined;
+    }
+  }, []);
 
   // تسجيل حالة التطوير لجمع البيانات من DOM
   useEffect(() => {
@@ -43,16 +84,47 @@ export function useLayoutAuditor(layoutState) {
   const run = useCallback(() => {
     const state = collectLayoutState();
     const auditResults = runLayoutAudit(state);
+    const scanTime = Date.now();
     setResults(auditResults);
-    setLastRun(Date.now());
+    setLastRun(scanTime);
 
     if (isDevelopment) {
       const report = formatAuditReport(auditResults);
       const violated = auditResults.filter(r => r.violated);
-      if (violated.length > 0) {
-        console.warn(report);
-      } else {
-        console.log(report);
+      const critical = violated.filter(r => r.severity === 'critical').length;
+      const major = violated.filter(r => r.severity === 'major').length;
+      const minor = violated.filter(r => r.severity === 'minor').length;
+      const reportSignature = JSON.stringify(violated.map(result => ({
+        id: result.id,
+        severity: result.severity,
+        message: result.message,
+      })));
+
+      const hudPayload = {
+        results: auditResults,
+        lastRun: scanTime,
+        lastScan: new Date(scanTime).toLocaleTimeString(),
+        passed: auditResults.length - violated.length,
+        critical,
+        major,
+        minor,
+        viewportWidth: state.viewportWidth,
+        viewportHeight: state.viewportHeight,
+      };
+      latestHudPayloadRef.current = hudPayload;
+
+      try {
+        localStorage.setItem('octopus-audit-hud', JSON.stringify(hudPayload));
+        hudChannelRef.current?.postMessage({ type: 'audit-update', payload: hudPayload });
+      } catch { /* ignore HUD persistence failures */ }
+
+      if (reportSignature !== reportSignatureRef.current) {
+        reportSignatureRef.current = reportSignature;
+        if (violated.length > 0) {
+          console.warn(report);
+        } else {
+          console.log(report);
+        }
       }
     }
 
@@ -63,11 +135,13 @@ export function useLayoutAuditor(layoutState) {
   useEffect(() => {
     if (!isDevelopment) return;
 
+    const initialRunTimer = setTimeout(run, 0);
     autoIntervalRef.current = setInterval(() => {
       run();
     }, 5000);
 
     return () => {
+      clearTimeout(initialRunTimer);
       if (autoIntervalRef.current) clearInterval(autoIntervalRef.current);
     };
   }, [run]);

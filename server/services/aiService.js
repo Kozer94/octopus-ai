@@ -1,5 +1,18 @@
 const { createEnvReader } = require('./envService');
 const { delay, withTimeout } = require('./asyncControl');
+const { hudLog, hudProviderUpdate } = require('../hud-ws');
+
+const DEFAULT_PROVIDER_NAMES = [
+  'Ollama',
+  'Groq llama-3.3-70b',
+  'Groq llama-3.1-8b',
+  'Groq llama-3.2-3b',
+  'Mistral',
+  'Cohere',
+  'Together',
+  'OpenRouter',
+  'Gemini',
+];
 
 function readChatChoice(data, providerName) {
   const content = data.choices?.[0]?.message?.content;
@@ -240,12 +253,15 @@ async function handleProviderError({
   error,
   errors,
   logger,
+  providerName,
   providerIndex,
   retryRound,
 }) {
   const msg = error.message || String(error);
   if (msg === 'no key') {
     errors.push(`provider[${providerIndex}]: no key`);
+    hudLog('warn', `${providerName} rejected: no API key`);
+    hudProviderUpdate(providerName, 'no-key');
     logProviderLifecycle(debugLog, { decision: 'reject', error_reason: 'no key' });
     return { action: 'continue', activeMessages, retryRound };
   }
@@ -253,6 +269,8 @@ async function handleProviderError({
   if (isPayloadTooLarge(error, msg)) {
     logger.log(`⚠️ provider[${providerIndex}] payload too large, reducing context 30%...`);
     errors.push(`provider[${providerIndex}]: payload too large`);
+    hudLog('warn', `${providerName} payload too large`);
+    hudProviderUpdate(providerName, 'error', { reason: 'payload too large' });
     logProviderLifecycle(debugLog, {
       decision: 'retry',
       error_reason: msg,
@@ -270,6 +288,8 @@ async function handleProviderError({
     const backoffMs = Math.min(1000 * Math.pow(2, retryRound), 8000);
     logger.log(`⚠️ provider[${providerIndex}] rate limited, waiting ${backoffMs}ms then trying next...`);
     errors.push(`provider[${providerIndex}]: rate limited`);
+    hudLog('warn', `${providerName} rate limited`);
+    hudProviderUpdate(providerName, 'error', { reason: 'rate limited' });
     logProviderLifecycle(debugLog, {
       decision: 'retry',
       error_reason: msg,
@@ -282,6 +302,8 @@ async function handleProviderError({
 
   logger.log(`⚠️ provider[${providerIndex}] error: ${msg}`);
   errors.push(`provider[${providerIndex}]: ${msg}`);
+  hudLog('warn', `${providerName} failed: ${msg}`);
+  hudProviderUpdate(providerName, 'error', { reason: msg });
   logProviderLifecycle(debugLog, {
     decision: 'reject',
     error_reason: msg,
@@ -353,12 +375,20 @@ function createAIService({
     }
 
     // ── PHASE 3: Provider loop ────────────────────────────────────
-    const allProviders = [...pluginProviders.map(p => p.call), ...providers].slice(0, Math.max(1, maxProviderAttempts));
+    const pluginProviderDescriptors = pluginProviders.map((provider, index) => ({
+      call: provider.call,
+      name: provider.name || provider.id || `Plugin provider ${index}`,
+    }));
+    const defaultProviderDescriptors = providers.map((provider, index) => ({
+      call: provider,
+      name: DEFAULT_PROVIDER_NAMES[index] || `provider[${index}]`,
+    }));
+    const allProviders = [...pluginProviderDescriptors, ...defaultProviderDescriptors].slice(0, Math.max(1, maxProviderAttempts));
     const errors       = [];
     let   retryRound   = 0;
 
     for (let i = 0; i < allProviders.length; i++) {
-      const provider    = allProviders[i];
+      const { call: provider, name: providerName } = allProviders[i];
       const payloadJson = JSON.stringify(activeMessages);
       const debugLog    = {
         step:                  'before_provider_call',
@@ -374,12 +404,18 @@ function createAIService({
       console.log('DEBUG_REQUEST_LIFECYCLE:', JSON.stringify(debugLog));
 
       try {
+        const startedAt = Date.now();
         const result = await withTimeout(
           () => provider(activeMessages, Math.min(maxTokens, TOKEN_BUDGET)),
           providerTimeoutMs,
           `provider[${i}]`,
         );
-        if (result) return result;
+        if (result) {
+          const latency = Date.now() - startedAt;
+          hudLog('ok', `AI response via ${providerName} - ${latency}ms`);
+          hudProviderUpdate(providerName, 'active', { latency });
+          return result;
+        }
       } catch (error) {
         const outcome = await handleProviderError({
           activeMessages,
@@ -387,6 +423,7 @@ function createAIService({
           error,
           errors,
           logger,
+          providerName,
           providerIndex: i,
           retryRound,
         });

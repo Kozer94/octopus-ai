@@ -41,6 +41,13 @@ export function AuditorPanel({ auditResults, onRun, t }) {
           </span>
         )}
         <button
+          onClick={() => window.open('/dev-hud.html', 'octopus-dev-hud', 'width=980,height=720')}
+          style={{ background: 'transparent', border: `0.5px solid ${t.border}`, borderRadius: 4, color: t.textMuted, padding: '3px 8px', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+          title="Open Dev HUD"
+        >
+          <i className="codicon codicon-open-preview" style={{ fontSize: 10 }} /> HUD
+        </button>
+        <button
           onClick={onRun}
           style={{ background: t.border, border: 'none', borderRadius: 4, color: t.text, padding: '3px 8px', fontSize: 10, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
         >
