@@ -1,4 +1,5 @@
 import { BACKEND } from '../config/uiConfig.js';
+import { getDynamicToken } from './securityBootstrap.js';
 
 const MAX_BREADCRUMBS = 40;
 const MAX_QUEUE = 120;
@@ -69,9 +70,8 @@ function ensureLastPatchState(source = 'app-runtime') {
 }
 
 function getAuthHeaders() {
-  const storedToken = globalThis.localStorage?.getItem('octopusApiToken') || '';
-  const envToken = import.meta.env?.VITE_OCTOPUS_API_TOKEN || '';
-  const token = storedToken || envToken;
+  // Read from localStorage directly every time (most reliable)
+  const token = localStorage.getItem('octopusApiToken') || '';
   return token ? { 'X-Octopus-Token': token } : {};
 }
 
@@ -204,7 +204,14 @@ function flush() {
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({ events }),
     keepalive: true,
-  }).catch(() => {});
+  }).catch((error) => {
+    // 401 = unauthenticated bootstrap state, not a crash
+    // Silently skip telemetry when not authenticated
+    if (error?.message?.includes('401') || error?.status === 401) {
+      return; // Unauthenticated state - skip telemetry
+    }
+    // Other errors: silently skip to avoid app crash
+  });
 }
 
 // ─── Monkey Patches ───────────────────────────────────────────────────────────

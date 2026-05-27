@@ -10,18 +10,37 @@ import { createSessionId } from './config/uiConfig.js'
 import { initCorrelation } from './services/correlationLayer.js'
 import { installRuntimeTelemetry } from './services/runtimeTelemetry.js'
 import { registerMonacoThemes } from './utils/monacoThemes.js'
+import { bootstrapSecurityContext } from './services/securityBootstrap.js'
+
+// ═══════════════════════════════════════════════════════════
+// 🔐 Security Bootstrap Phase
+// ═══════════════════════════════════════════════════════════
+// Order:
+// 1. Resolve Identity (load token)
+// 2. Attach Token (set global auth context)
+// 3. Initialize Correlation Context
+// 4. THEN start telemetry + API clients
+// ═══════════════════════════════════════════════════════════
 
 loader.config({ monaco })
 registerMonacoThemes(monaco)
+
+// Step 1-2: Security Bootstrap
+const authContext = await bootstrapSecurityContext();
+
 const _runtimeSessionId = createSessionId();
 const _runtimeTraceId   = globalThis.crypto?.randomUUID?.() || _runtimeSessionId;
-installRuntimeTelemetry({ sessionId: _runtimeSessionId, traceId: _runtimeTraceId })
+
+// Step 3: Initialize Correlation Context
 initCorrelation({
   sessionId: _runtimeSessionId,
   traceId: _runtimeTraceId,
   verbose: import.meta.env?.DEV === true,
-  authToken: globalThis.localStorage?.getItem('octopusApiToken') || import.meta.env?.VITE_OCTOPUS_API_TOKEN || '',
+  authToken: authContext.token || '',
 })
+
+// Step 4: Start telemetry (now safe because auth context is ready)
+installRuntimeTelemetry({ sessionId: _runtimeSessionId, traceId: _runtimeTraceId })
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

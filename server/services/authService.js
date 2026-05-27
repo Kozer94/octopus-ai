@@ -2,6 +2,12 @@ const crypto = require('crypto');
 
 const DEFAULT_PUBLIC_API_PATHS = new Set([
   '/api/health',
+  '/api/events',
+  '/api/events/stream',
+  '/api/events/batch',
+  '/events',
+  '/events/stream',
+  '/events/batch',
 ]);
 
 function isLocalAddress(address = '') {

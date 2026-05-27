@@ -94,6 +94,9 @@ function registerOctopusRoutes(app, {
       }
     }
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
+      }
       const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '' } = req.body;
       const sessionId = (typeof rawSessionId === 'string' ? rawSessionId : 'default').slice(0, 128).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'default';
       const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: '' };
@@ -165,6 +168,9 @@ ${command.slice(0, 2000)}
 
   app.post('/api/octopus/preview', aiLimiter, async (req, res) => {
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
+      }
       const {
         command,
         projectDir = '',
@@ -201,6 +207,9 @@ ${command.slice(0, 2000)}
 
   app.post('/api/octopus/parallel', aiLimiter, async (req, res) => {
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
+      }
       const {
         command,
         projectDir = '',
@@ -250,6 +259,9 @@ ${command.slice(0, 2000)}
     };
 
     try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
+      }
       const {
         command,
         sessionId = 'default',

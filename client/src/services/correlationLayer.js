@@ -567,10 +567,11 @@ function _scheduleFlush() {
 function _flush() {
   if (!exportQueue.length) return;
   const events = exportQueue.splice(0, 50);
+  const token = localStorage.getItem('octopusApiToken') || '';
   const headers = {
     'Content-Type': 'application/json',
     'X-Trace-Id': _traceId,
-    ...(_authToken ? { 'X-Octopus-Token': _authToken } : {}),
+    ...(token ? { 'X-Octopus-Token': token } : {}),
   };
   fetch(`${BACKEND}/api/events/batch`, {
     method: 'POST',

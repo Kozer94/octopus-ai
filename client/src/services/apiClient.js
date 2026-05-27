@@ -1,4 +1,5 @@
 import { BACKEND } from '../config/uiConfig.js';
+import { getDynamicToken } from './securityBootstrap.js';
 
 async function parseJsonResponse(response) {
   const data = await response.json();
@@ -9,9 +10,8 @@ async function parseJsonResponse(response) {
 }
 
 function getAuthHeaders() {
-  const storedToken = globalThis.localStorage?.getItem('octopusApiToken') || '';
-  const envToken = import.meta.env?.VITE_OCTOPUS_API_TOKEN || '';
-  const token = storedToken || envToken;
+  // Read from localStorage directly every time (most reliable)
+  const token = localStorage.getItem('octopusApiToken') || '';
   return token ? { 'X-Octopus-Token': token } : {};
 }
 

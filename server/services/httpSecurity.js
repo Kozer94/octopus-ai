@@ -23,8 +23,12 @@ function isAllowedCorsOrigin(origin, allowedOrigins = getAllowedOrigins()) {
 }
 
 function createCorsOptions(allowedOrigins = getAllowedOrigins()) {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
   return {
     origin(origin, callback) {
+      // In development, allow all origins for easier local testing
+      if (isDevelopment) return callback(null, true);
       if (isAllowedCorsOrigin(origin, allowedOrigins)) return callback(null, true);
       return callback(new Error('Not allowed by CORS'));
     },
