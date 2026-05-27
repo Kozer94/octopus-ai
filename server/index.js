@@ -123,6 +123,16 @@ const {
 app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(limiter);
+
+// Debug logging for request body issues
+app.use('/api', (req, res, next) => {
+  if (req.method === 'POST' && !req.body) {
+    console.warn(`⚠️ Missing req.body for ${req.method} ${req.path}`);
+    console.warn(`Headers:`, req.headers['content-type']);
+  }
+  next();
+});
+
 app.use('/api', createAuthMiddleware());
 app.use('/api', createRequestGuard());
 app.use(eventsBurstGuard);
@@ -131,11 +141,11 @@ app.use('/api', mutationLimiter);
 // ═══════════════════════════════════════════════════════════
 // 🔐 Security Kernel — نظام الأمان المركزي
 // ═══════════════════════════════════════════════════════════
-const securityKernel = createSecurityKernel({
-  // ─── Governance Layer — الحوكمة والمرونة المُحكمة ───
-  const { createScopedTokenResolvers, ElevationStore } = require('./services/governanceLayer');
-  const elevationStore = new ElevationStore();
+// ─── Governance Layer — الحوكمة والمرونة المُحكمة ───
+const { createScopedTokenResolvers, ElevationStore } = require('./services/governanceLayer');
+const elevationStore = new ElevationStore();
 
+const securityKernel = createSecurityKernel({
   // ─── Identity Resolvers — تدرج في الصلاحيات ───
   identityResolvers: [
     // 🔑 Scoped tokens (أولوية — من OCTOPUS_TOKEN_DEV, OCTOPUS_TOKEN_VIEWER, etc.)
@@ -303,10 +313,11 @@ const governanceDashboard = new GovDashboard({
 
 // تمرير governance objects للـ routes
 registerGovRoutes(app, {
+  governanceLayer: {
+    dashboard: governanceDashboard,
+    elevationStore,
+  },
   securityKernel,
-  elevationStore,
-  dashboard: governanceDashboard,
-  routeCapabilities: listRouteCapabilities(),
 });
 
 // Level 3 — Trace ID propagation: يربط كل server event بالـ client request الأصلي
