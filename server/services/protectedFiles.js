@@ -12,6 +12,18 @@ const PROTECTED_PATHS = Object.freeze([
   'server/validatorLayer.js',
   'server/brainController.js',
   'server/executionEngine.js',
+  'server/supervisor.js',
+  'server/modelSelector.js',
+  'server/hud-ws.js',
+  'server/services/authService.js',
+  'server/services/httpSecurity.js',
+  'server/services/inputValidation.js',
+  'server/services/terminalService.js',
+  'server/services/pluginSandbox.js',
+  'server/services/protectedFiles.js',
+  'server/services/rateLimitService.js',
+  'server/services/fileService.js',
+  'server/services/executionControlService.js',
   'client/src/App.jsx',
 ]);
 

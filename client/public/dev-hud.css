@@ -110,9 +110,11 @@ button:disabled {
   gap: 12px;
   margin-top: 10px;
   padding: 10px 12px;
-  color: rgba(214, 246, 243, 0.72);
+  /* رفع التباين لتحسين WCAG contrast ضمن DOM audit */
+  color: rgba(214, 246, 243, 0.86);
   font-size: 12px;
 }
+
 
 .issues {
   display: grid;
@@ -121,7 +123,8 @@ button:disabled {
 }
 
 .dom-section,
-.engineer-section {
+.engineer-section,
+.runtime-section {
   margin-top: 14px;
 }
 
@@ -195,6 +198,21 @@ button:disabled {
   color: #3fb950;
 }
 
+.badge.status-success {
+  background: rgba(88, 166, 255, 0.16);
+  color: #58a6ff;
+}
+
+.badge.status-applied {
+  background: rgba(63, 185, 80, 0.16);
+  color: #3fb950;
+}
+
+.badge.status-skipped {
+  background: rgba(214, 246, 243, 0.1);
+  color: rgba(214, 246, 243, 0.72);
+}
+
 .badge.live,
 .badge.ok {
   background: rgba(63, 185, 80, 0.16);
@@ -251,6 +269,50 @@ button:disabled {
   font-size: 11px;
 }
 
+.runtime-card {
+  border-color: rgba(255, 123, 114, 0.36);
+}
+
+.runtime-card.warning {
+  border-color: rgba(240, 136, 62, 0.36);
+}
+
+.runtime-location {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+  color: rgba(214, 246, 243, 0.72);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+}
+
+.runtime-location span {
+  border: 1px solid rgba(50, 210, 190, 0.16);
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.runtime-stack,
+.runtime-breadcrumbs {
+  margin: 9px 0 0;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 8px;
+  color: rgba(214, 246, 243, 0.72);
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.runtime-breadcrumbs {
+  max-height: 120px;
+}
+
 .ai-proposal {
   margin-top: 12px;
   max-height: 280px;
@@ -264,6 +326,63 @@ button:disabled {
   font-size: 11px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.ai-patch-preview {
+  margin-top: 12px;
+  border: 1px solid rgba(127, 119, 221, 0.32);
+  background: rgba(127, 119, 221, 0.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.ai-patch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(127, 119, 221, 0.14);
+  border-bottom: 1px solid rgba(127, 119, 221, 0.2);
+}
+
+.ai-patch-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #c4c0f5;
+}
+
+.ai-analysis {
+  margin: 8px 10px 4px;
+  color: rgba(214, 246, 243, 0.78);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-patch-code {
+  margin: 6px 10px;
+  max-height: 200px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 4px;
+  padding: 8px;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: #d6f6f3;
+}
+
+.ai-patch-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+.ai-patch-actions button {
+  padding: 4px 9px;
+  font-size: 11px;
 }
 
 .logs-section {

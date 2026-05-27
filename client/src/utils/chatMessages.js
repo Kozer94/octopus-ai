@@ -11,8 +11,8 @@ export function userMessage(text) {
   return { id: createMessageId('user'), role: 'user', text };
 }
 
-export function octopusMessage(text) {
-  return { id: createMessageId('octopus'), role: 'octopus', text };
+export function octopusMessage(text, extra = {}) {
+  return { id: createMessageId('octopus'), role: 'octopus', text, ...extra };
 }
 
 export function octopusErrorMessage(error) {

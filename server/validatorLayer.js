@@ -129,10 +129,31 @@ function extractTerminalCommands(aiResponse) {
 }
 
 // ─── validateProjectBinding ──────────────────────────────────
+// 🔒 المسارات الممنوعة — مجلدات النظام الحساسة
+const FORBIDDEN_PATH_PATTERNS = [
+  /^\/etc/i, /^\/var/i, /^\/usr/i, /^\/bin/i, /^\/sbin/i, /^\/boot/i, /^\/dev/i, /^\/proc/i, /^\/sys/i,
+  /^\/root/i, /^\/home\/$/i,
+  /^[A-Z]:\\(Windows|Program Files|Program Files \(x86\)|System32|Users\\[^\\]+$)/i,
+];
+
 function validateProjectBinding(projectDir, _clientProjectName = '') {
   if (!projectDir) return { ok: true, projectRoot: '' };
   try {
     const resolved = path.resolve(projectDir);
+
+    // 🔒 منع الوصول لمجلدات النظام الحساسة
+    const isForbidden = FORBIDDEN_PATH_PATTERNS.some(pattern => pattern.test(resolved));
+    if (isForbidden) {
+      return { ok: false, error: `المسار ممنوع لأسباب أمنية: ${projectDir}` };
+    }
+
+    // 🔒 منع الوصول لمجلد المنزل الجذري
+    const os = require('os');
+    const homeDir = os.homedir();
+    if (resolved === homeDir) {
+      return { ok: false, error: 'لا يمكن استخدام مجلد المنزل الجذري كمجلد مشروع' };
+    }
+
     if (!fs.statSync(resolved).isDirectory()) {
       return { ok: false, error: `Path is not a directory: ${projectDir}` };
     }
@@ -142,4 +163,4 @@ function validateProjectBinding(projectDir, _clientProjectName = '') {
   }
 }
 
-module.exports = { validateWrite, safeWrite, extractAndWrite, extractTerminalCommands, isProtected, validateProjectBinding };
+module.exports = { FORBIDDEN_PATH_PATTERNS, validateWrite, safeWrite, extractAndWrite, extractTerminalCommands, isProtected, validateProjectBinding };

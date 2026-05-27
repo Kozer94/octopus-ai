@@ -1,7 +1,11 @@
 import { BACKEND } from '../config/uiConfig.js';
 
 async function parseJsonResponse(response) {
-  return response.json();
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed with ${response.status}`);
+  }
+  return data;
 }
 
 function getAuthHeaders() {
@@ -52,7 +56,7 @@ export async function getJson(path) {
   return parseJsonResponse(response);
 }
 
-export async function postEventStream(path, body, { onMessage, requireComplete = false, signal } = {}) {
+export async function postEventStream(path, body, { onMessage, requireComplete = false, signal, inactivityTimeout = 120_000 } = {}) {
   const response = await fetch(`${BACKEND}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -70,7 +74,7 @@ export async function postEventStream(path, body, { onMessage, requireComplete =
     throw new Error(data.error || `Request failed with ${response.status}`);
   }
 
-  const INACTIVITY_TIMEOUT_MS = 120_000;
+  const INACTIVITY_TIMEOUT_MS = inactivityTimeout;
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -105,7 +109,7 @@ export async function postEventStream(path, body, { onMessage, requireComplete =
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
         reader.cancel();
-        reject(new Error('Stream timed out: no event received for 120 seconds'));
+        reject(new Error(`Stream timed out: no event received for ${INACTIVITY_TIMEOUT_MS / 1000}s`));
       }, INACTIVITY_TIMEOUT_MS);
     });
 
@@ -153,16 +157,36 @@ export const workspaceApi = {
 };
 
 export const extensionsApi = {
+  activate: extensionId => postJson('/api/extensions/activate', { extensionId }),
+  deactivate: extensionId => postJson('/api/extensions/deactivate', { extensionId }),
+  list: () => getJson('/api/extensions/list'),
   search: query => getJson(`/api/vsx-search?q=${encodeURIComponent(query)}&size=20`),
   install: extension => postJson('/api/extensions/install', { extension }),
+  installLocalVsix: async file => {
+    const response = await fetch(`${BACKEND}/api/extensions/install-local-vsix`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-VSIX-Filename': encodeURIComponent(file.name || 'extension.vsix'),
+        ...getAuthHeaders(),
+      },
+      body: await file.arrayBuffer(),
+    });
+    return parseJsonResponse(response);
+  },
+  status: extensionId => getJson(`/api/extensions/status/${encodeURIComponent(extensionId)}`),
   uninstall: extensionId => postJson('/api/extensions/uninstall', { extensionId }),
+};
+
+export const shimApi = {
+  repair: ({ extensionId, errorSignal }) => postJson('/api/shim/repair', { extensionId, errorSignal }),
 };
 
 export const terminalApi = {
   command: ({ command, cwd, signal }) => postJson('/api/terminal', { command, cwd }, { signal }),
   interrupt: () => postJson('/api/terminal/interrupt', {}),
   run: ({ command, cwd }) => postJson('/api/run', { command, cwd }),
-  stream: ({ command, cwd, onMessage, signal }) => postEventStream('/api/terminal/stream', { command, cwd }, { onMessage, signal }),
+  stream: ({ command, cwd, onMessage, signal }) => postEventStream('/api/terminal/stream', { command, cwd }, { onMessage, signal, inactivityTimeout: 600_000 }),
   stop: () => postJson('/api/stop', {}),
 };
 

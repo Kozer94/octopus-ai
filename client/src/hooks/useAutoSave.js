@@ -20,6 +20,8 @@ export function useAutoSave({
   const AUTO_SAVE_INTERVAL_MS = 30_000;
   const lastSavedContentRef = useRef(new Map());
   const autoSaveTimerRef = useRef(null);
+  const autoSaveRef = useRef(null);
+  const autoSaveOwnerRef = useRef(null);
 
   // تحديد الملفات المتسخة
   const getDirtyFiles = useCallback(() => {
@@ -65,13 +67,40 @@ export function useAutoSave({
     }
   }, [getDirtyFiles, saveFile, addOctopusMessage]);
 
+  useEffect(() => {
+    autoSaveRef.current = autoSave;
+  }, [autoSave]);
+
   // تشغيل auto-save كل 30 ثانية
   useEffect(() => {
-    autoSaveTimerRef.current = setInterval(autoSave, AUTO_SAVE_INTERVAL_MS);
-    return () => {
-      if (autoSaveTimerRef.current) clearInterval(autoSaveTimerRef.current);
+    window.__OCTOPUS_AUTOSAVE__ = window.__OCTOPUS_AUTOSAVE__ || {
+      owner: null,
+      timer: null,
+      starts: 0,
+      startedAt: null,
     };
-  }, [autoSave]);
+    const owner = `autosave-${window.__OCTOPUS_AUTOSAVE__.starts + 1}`;
+    autoSaveOwnerRef.current = owner;
+    if (window.__OCTOPUS_AUTOSAVE__.timer) {
+      clearInterval(window.__OCTOPUS_AUTOSAVE__.timer);
+    }
+    window.__OCTOPUS_AUTOSAVE__.owner = owner;
+    window.__OCTOPUS_AUTOSAVE__.starts += 1;
+    window.__OCTOPUS_AUTOSAVE__.startedAt = new Date().toISOString();
+    autoSaveTimerRef.current = setInterval(() => {
+      autoSaveRef.current?.();
+    }, AUTO_SAVE_INTERVAL_MS);
+    window.__OCTOPUS_AUTOSAVE__.timer = autoSaveTimerRef.current;
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+      }
+      if (window.__OCTOPUS_AUTOSAVE__?.owner === owner) {
+        window.__OCTOPUS_AUTOSAVE__.timer = null;
+        window.__OCTOPUS_AUTOSAVE__.owner = null;
+      }
+    };
+  }, []);
 
   // تسجيل المحتوى عند فتح ملف جديد (للتتبع)
   useEffect(() => {

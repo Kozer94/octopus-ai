@@ -17,6 +17,7 @@ npm-debug.log*
 
 # Runtime snapshots
 server/state/runtime/
+server/state/extensions/
 
 # OS
 .DS_Store

@@ -3,6 +3,33 @@ const path = require('path');
 
 const MAX_COMMAND_LENGTH = 500;
 
+// 🔒 قائمة بيضاء — الأوامر المسموحة فقط (whitelist approach)
+const ALLOWED_COMMANDS = new Set([
+  // Node.js & npm
+  'node', 'npm', 'npx',
+  // Git
+  'git',
+  // Python
+  'python', 'python3', 'pip', 'pip3',
+  // Package managers
+  'yarn', 'pnpm', 'bun',
+  // Build tools
+  'tsc', 'eslint', 'prettier', 'vite', 'webpack',
+  // File listing (safe read-only)
+  'ls', 'dir', 'find', 'tree', 'cat', 'head', 'tail', 'type',
+  // System info (read-only)
+  'echo', 'pwd', 'whoami', 'which', 'where', 'env',
+  // Docker
+  'docker', 'docker-compose',
+  // Testing
+  'jest', 'vitest', 'mocha', 'pytest',
+  // Windows
+  'tasklist', 'taskkill', 'cmd', 'powershell',
+  // Other dev tools
+  'cargo', 'go', 'rustc', 'make', 'cmake',
+]);
+
+// 🔒 القائمة السوداء — طبقة حماية إضافية (حتى لو كان الأمر في القائمة البيضاء)
 const BLOCKED_PATTERNS = [
   // الأوامر المدمرة
   /\brm\s+-rf\b/i,
@@ -74,6 +101,16 @@ function validateCommand(command) {
     throw error;
   }
 
+  // 🔒 الخطوة 1: القائمة البيضاء — استخراج اسم الأمر الرئيسي والتحقق منه
+  const firstPart = normalized.split(/\s+/)[0];
+  const commandName = path.basename(firstPart).toLowerCase();
+  if (!ALLOWED_COMMANDS.has(commandName)) {
+    const error = new Error(`الأمر "${commandName}" غير مسموح — الأوامر المتاحة: ${[...ALLOWED_COMMANDS].join(', ')}`);
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // 🔒 الخطوة 2: القائمة السوداء — طبقة حماية إضافية
   const blocked = BLOCKED_PATTERNS.find(pattern => pattern.test(normalized));
   if (blocked) {
     const error = new Error('هذا الأمر ممنوع لأنه قد يسبب حذفاً أو إيقافاً خطيراً');
@@ -166,6 +203,7 @@ function terminateProcess(proc) {
 }
 
 module.exports = {
+  ALLOWED_COMMANDS,
   buildSafeEnv,
   resolveWorkingDirectory,
   runCommand,

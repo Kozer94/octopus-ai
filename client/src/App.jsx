@@ -20,10 +20,27 @@ import { useCommandPalette } from './hooks/useCommandPalette';
 import { useWorkspaceSearch } from './hooks/useWorkspaceSearch';
 import './styles/animations.css';
 import './styles/depth.css';
-import { filesApi } from './services/apiClient';
+import { filesApi, shimApi } from './services/apiClient';
 import { INITIAL_CHAT_MESSAGES, octopusMessage } from './utils/chatMessages';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useLayoutAuditor } from './auditor/useLayoutAuditor';
+
+const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001b\[[0-9;]*m`, 'g');
+
+function stripAnsi(value = '') {
+  return String(value).replace(ANSI_ESCAPE_PATTERN, '').trim();
+}
+
+function getRuntimeErrorSignal(runtimeStatus = {}) {
+  if (runtimeStatus.error) return stripAnsi(runtimeStatus.error);
+  const logs = Array.isArray(runtimeStatus.logs) ? runtimeStatus.logs : [];
+  const failureLog = [...logs].reverse().find(log => {
+    const message = stripAnsi(log?.message);
+    return log?.level === 'err'
+      || /activationFailed|ACTIVATE FAILED|TypeError|ReferenceError|is not a function|Cannot /.test(message);
+  });
+  return failureLog ? stripAnsi(failureLog.message) : 'Unknown VS Code API compatibility failure';
+}
 
 export default function App() {
   const { activateLeg, completeLeg, legs, resetLegs, setLegs } = useLegProgress();
@@ -77,8 +94,50 @@ export default function App() {
   const [pendingTerminalCommands, setPendingTerminalCommands] = useState([]);
   const [workflowError, setWorkflowError] = useState(null);
   const [sessionId] = useState(() => createSessionId());
+  const [repairingShimFor, setRepairingShimFor] = useState('');
+  const lastExtensionRuntimeFailureRef = useRef('');
   function appendOctopusMessage(text) {
     setMessages(prev => [...prev, octopusMessage(text)]);
+  }
+
+  function suggestExtensionShim({ extensionId, status }) {
+    const error = getRuntimeErrorSignal(status?.runtimeStatus);
+    const signature = `${extensionId}:${error}`;
+    if (lastExtensionRuntimeFailureRef.current === signature) return;
+    lastExtensionRuntimeFailureRef.current = signature;
+    const text = [
+      `🧩 Runtime failed while activating \`${extensionId}\`.`,
+      '',
+      'I detected this as a VS Code API compatibility gap in the experimental shim host.',
+      `Missing/error signal: ${error}`,
+      '',
+      'I can draft the next `vscodeShim` polyfill for this extension and add a focused regression test.',
+    ].join('\n');
+    setMessages(prev => [...prev, octopusMessage(text, {
+      extensionRuntimeFailure: { extensionId, errorSignal: error },
+    })]);
+    setRightPanelOpen(true);
+    setRightPanelTab('chat');
+  }
+
+  async function repairExtensionShim({ extensionId, errorSignal }) {
+    if (!extensionId || repairingShimFor) return;
+    setRepairingShimFor(extensionId);
+    try {
+      const result = await shimApi.repair({ extensionId, errorSignal });
+      const status = result.applied ? 'Applied' : 'Already present';
+      setMessages(prev => [...prev, octopusMessage([
+        `🛠️ ${status}: ${result.polyfillId}`,
+        result.message,
+        `Changed: ${(result.changedFiles || []).join(', ') || 'no files changed'}`,
+        '',
+        'Try Activate shim again to verify the next runtime gap.',
+      ].join('\n'))]);
+    } catch (error) {
+      setMessages(prev => [...prev, octopusMessage(`⚠️ Shim repair was not applied: ${error.message}`)]);
+    } finally {
+      setRepairingShimFor('');
+    }
   }
 
   const activateSidebarPanel = (activityId) => {
@@ -147,7 +206,10 @@ export default function App() {
     extSearchQuery,
     extSearchResults,
     extSearching,
+    activateExtension,
+    deactivateExtension,
     installExtension,
+    installLocalVsix,
     installedExtensions,
     isExtensionInstalled,
     searchExtensions,
@@ -155,7 +217,7 @@ export default function App() {
     setExtSearchQuery,
     setSelectedExtension,
     uninstallExtension,
-  } = useExtensionsManager();
+  } = useExtensionsManager({ onActivationFailed: suggestExtensionShim });
   const {
     refreshRuntimeInspector,
     runtimeControlPlane,
@@ -167,9 +229,11 @@ export default function App() {
     runtimeTree,
     runtimeWorkers,
     selectedRuntimeTask,
+    selectedTraceId,
     setSelectedRuntimeTask,
     setTimelineEvents,
     timelineEvents,
+    traceSpans,
   } = useRuntimeInspector({ rightPanelTab });
   const {
     clearTerminal,
@@ -314,6 +378,7 @@ export default function App() {
   });
 
   const { handleScan } = useProjectScan({ currentDir, refreshFileTree, setMessages });
+
   const activateRightPanel = (tab) => {
     setRightPanelTab(tab);
     setRightPanelOpen(true);
@@ -400,7 +465,14 @@ export default function App() {
       gitLoading={gitLoading}
       handleScan={handleScan}
       input={input}
+      activateExtension={activateExtension}
+      deactivateExtension={deactivateExtension}
+      onSuggestExtensionShim={(extension) => suggestExtensionShim({
+        extensionId: extension.id || extension.name,
+        status: { runtimeStatus: extension.runtimeStatus },
+      })}
       installExtension={installExtension}
+      installLocalVsix={installLocalVsix}
       interruptTerminalCommand={interruptTerminalCommand}
       isExtensionInstalled={isExtensionInstalled}
       isRunning={isRunning}
@@ -411,6 +483,7 @@ export default function App() {
       menuItems={titleMenuItems}
       menuOpen={menuOpen}
       messages={messages}
+      onRepairExtensionShim={repairExtensionShim}
       monacoRef={monacoRef}
       onFileClick={onFileClick}
       openFolder={openFolder}
@@ -435,6 +508,7 @@ export default function App() {
       runtimeTrace={runtimeTrace}
       runtimeTree={runtimeTree}
       runtimeWorkers={runtimeWorkers}
+      selectedTraceId={selectedTraceId}
       searchExtensions={searchExtensions}
       searchInputRef={searchInputRef}
       searchQuery={searchQuery}
@@ -480,10 +554,12 @@ export default function App() {
       theme={theme}
       themeOpen={themeOpen}
       timelineEvents={timelineEvents}
+      traceSpans={traceSpans}
       toggleRun={toggleRun}
       uninstallExtension={uninstallExtension}
       workflowError={workflowError}
       onWorkflowErrorDismiss={() => setWorkflowError(null)}
+      repairingShimFor={repairingShimFor}
       auditResults={auditor.results}
       onAuditRun={auditor.run}
       isCommandPaletteOpen={isCommandPaletteOpen}

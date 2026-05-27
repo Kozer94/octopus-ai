@@ -32,6 +32,22 @@ export function useLayoutAuditor(layoutState) {
         if (event.data?.type === 'audit-request' && latestHudPayloadRef.current) {
           channel.postMessage({ type: 'audit-update', payload: latestHudPayloadRef.current });
         }
+        if (event.data?.type === 'css-patch-apply' && typeof event.data.code === 'string') {
+          const style = document.createElement('style');
+          style.id = `oct-hud-patch-${Date.now()}`;
+          style.textContent = event.data.code;
+          document.head.appendChild(style);
+          window.__OCTOPUS_LAST_PATCH__ = {
+            ...(event.data.patch || {}),
+            status: 'applied',
+            source: 'app-runtime',
+            changed: true,
+            code: event.data.code,
+            styleId: style.id,
+            message: 'Patch preview style was injected into the app document.',
+            at: new Date().toISOString(),
+          };
+        }
         if (event.data?.type === 'dom-audit-request') {
           const domAudit = runDomAudit({ autoFix: event.data.autoFix === true });
           const payload = {

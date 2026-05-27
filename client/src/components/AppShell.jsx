@@ -45,7 +45,11 @@ export function AppShell(props) {
     gitLoading,
     handleScan,
     input,
+    activateExtension,
+    deactivateExtension,
+    onSuggestExtensionShim,
     installExtension,
+    installLocalVsix,
     interruptTerminalCommand,
     isExtensionInstalled,
     isRunning,
@@ -58,6 +62,7 @@ export function AppShell(props) {
     messages,
     monacoRef,
     onFileClick,
+    onRepairExtensionShim,
     openFolder,
     onWorkflowErrorDismiss,
     projectName,
@@ -66,6 +71,7 @@ export function AppShell(props) {
     refreshRuntimeInspector,
     rejectDiffFile,
     rejectTerminalCommand,
+    repairingShimFor,
     approveTerminalCommand,
     reset,
     rightPanelOpen,
@@ -81,6 +87,7 @@ export function AppShell(props) {
     runtimeTrace,
     runtimeTree,
     runtimeWorkers,
+    selectedTraceId,
     searchInputRef,
     searchQuery,
     searchResults,
@@ -125,6 +132,7 @@ export function AppShell(props) {
     theme,
     themeOpen,
     timelineEvents,
+    traceSpans,
     toggleRun,
     auditResults,
     onAuditRun,
@@ -270,6 +278,7 @@ export function AppShell(props) {
               extSearchResults={extSearchResults}
               extSearching={extSearching}
               installExtension={installExtension}
+              installLocalVsix={installLocalVsix}
               isExtensionInstalled={isExtensionInstalled}
               onQueryChange={setExtSearchQuery}
               onSelectExtension={setSelectedExtension}
@@ -293,6 +302,9 @@ export function AppShell(props) {
             displayFilePath={displayFilePath}
             editorRef={editorRef}
             files={files}
+            activateExtension={activateExtension}
+            deactivateExtension={deactivateExtension}
+            onSuggestExtensionShim={onSuggestExtensionShim}
             installExtension={installExtension}
             isExtensionInstalled={isExtensionInstalled}
             loadingFiles={loadingFiles}
@@ -341,6 +353,7 @@ export function AppShell(props) {
           legs={legs}
           loading={loading}
           messages={messages}
+          onRepairExtensionShim={onRepairExtensionShim}
           auditResults={auditResults}
           onAuditRun={onAuditRun}
           onResizeStart={startRightPanelResize}
@@ -348,6 +361,7 @@ export function AppShell(props) {
           onTimelineClear={() => setTimelineEvents([])}
           projectName={projectName}
           reset={reset}
+          repairingShimFor={repairingShimFor}
           rightPanelOpen={rightPanelOpen}
           rightPanelTab={rightPanelTab}
           rightPanelWidth={rightPanelWidth}
@@ -359,6 +373,7 @@ export function AppShell(props) {
           runtimeTrace={runtimeTrace}
           runtimeTree={runtimeTree}
           runtimeWorkers={runtimeWorkers}
+          selectedTraceId={selectedTraceId}
           selectedRuntimeTask={selectedRuntimeTask}
           send={send}
           setActiveFile={setActiveFile}
@@ -368,6 +383,7 @@ export function AppShell(props) {
           setSelectedRuntimeTask={setSelectedRuntimeTask}
           t={t}
           timelineEvents={timelineEvents}
+          traceSpans={traceSpans}
         />
       </div>
 

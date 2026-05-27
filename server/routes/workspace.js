@@ -61,6 +61,7 @@ function registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatche
         ignored: /(node_modules|\.git|vendor|\.next|dist)/,
         persistent: true,
         ignoreInitial: true,
+        ignorePermissionErrors: true,
       });
 
       watcher.on('add', filePath => {
@@ -75,6 +76,10 @@ function registerWorkspaceRoutes(app, { ensureProjectMap, ensureProjectMapWatche
         watchClients.forEach(client => {
           try { client.write(`data: ${event}\n\n`); } catch { }
         });
+      });
+
+      watcher.on('error', error => {
+        console.warn(`Workspace watcher error: ${error.message}`);
       });
 
       res.json({ success: true });

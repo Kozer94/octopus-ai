@@ -7,9 +7,15 @@ const {
   writeProjectFileAsync,
 } = require('../services/fileService');
 const { readObject, readString } = require('../services/inputValidation');
+const { CAPABILITIES } = require('../services/securityKernel');
 
 function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus }) {
   app.post('/api/files/write', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const auth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_WRITE, resource: req.body?.filePath });
+      if (!auth || auth.allowed !== true) return res.status(403).json({ success: false, error: auth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
     try {
       const body = readObject(req.body, 'body');
       const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
@@ -43,6 +49,11 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus 
   });
 
   app.post('/api/files/read', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const rAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_READ, resource: req.body?.filePath });
+      if (!rAuth || rAuth.allowed !== true) return res.status(403).json({ success: false, error: rAuth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
     try {
       const body = readObject(req.body, 'body');
       const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
@@ -57,6 +68,11 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus 
   });
 
   app.post('/api/files/list', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const lAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_READ, resource: req.body?.dirPath });
+      if (!lAuth || lAuth.allowed !== true) return res.status(403).json({ success: false, error: lAuth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
     try {
       const body = readObject(req.body, 'body');
       const dirPath = readString(body.dirPath, 'dirPath', { max: 1000 });
@@ -80,6 +96,11 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus 
   });
 
   app.post('/api/files/delete', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const dAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_DELETE, resource: req.body?.filePath });
+      if (!dAuth || dAuth.allowed !== true) return res.status(403).json({ success: false, error: dAuth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
     try {
       const body = readObject(req.body, 'body');
       const filePath = readString(body.filePath, 'filePath', { required: true, max: 1000 });
@@ -102,6 +123,11 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus 
   });
 
   app.post('/api/files/rename', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const rnAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_WRITE, resource: req.body?.oldPath });
+      if (!rnAuth || rnAuth.allowed !== true) return res.status(403).json({ success: false, error: rnAuth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
     try {
       const body = readObject(req.body, 'body');
       const oldPath = readString(body.oldPath, 'oldPath', { required: true, max: 1000 });

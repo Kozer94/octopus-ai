@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { notifyReactError } from '../services/runtimeTelemetry.js';
 
 export class ErrorBoundary extends Component {
   constructor(props) {
@@ -15,6 +16,7 @@ export class ErrorBoundary extends Component {
       error,
       errorInfo,
     });
+    notifyReactError(error, errorInfo);
     console.error('ErrorBoundary caught an error:', error, errorInfo);
   }
 

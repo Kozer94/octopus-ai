@@ -51,6 +51,30 @@ function registerEventRoutes(app, { eventBus }) {
     }
   });
 
+  app.post('/api/events/batch', (req, res) => {
+    try {
+      const rawEvents = Array.isArray(req.body?.events) ? req.body.events : [];
+      const events = rawEvents.slice(0, 50).map(item => {
+        const { type, payload = {}, metadata = {}, meta = {} } = item || {};
+        return eventBus.publish(type, payload, {
+          ...metadata,
+          ...meta,
+          source: metadata.source || meta.source || 'api',
+        });
+      });
+      res.json({
+        success: true,
+        events,
+        meta: {
+          count: events.length,
+          truncated: rawEvents.length > events.length,
+        },
+      });
+    } catch (error) {
+      res.status(400).json({ success: false, error: error.message });
+    }
+  });
+
   app.get('/api/events/stream', (req, res) => {
     try {
       const { category = '', sessionId = '', severity = '', sinceId = '', taskId = '', traceId = '', type = '', replay = '1', limit = '100' } = req.query;

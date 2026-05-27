@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { eventsApi, runtimeApi } from '../services/apiClient';
 
 export function useRuntimeInspector({ rightPanelTab }) {
@@ -90,6 +90,22 @@ export function useRuntimeInspector({ rightPanelTab }) {
     };
   }, [selectedRuntimeTask]);
 
+  const selectedTraceId = useMemo(() => {
+    if (selectedRuntimeTask?.traceId) return selectedRuntimeTask.traceId;
+    const lastSpanEvent = [...timelineEvents].reverse().find(event => event.type === 'client.span.finished' && event.traceId);
+    return lastSpanEvent?.traceId || '';
+  }, [selectedRuntimeTask, timelineEvents]);
+
+  const traceSpans = useMemo(() => {
+    const spans = timelineEvents
+      .filter(event => event.type === 'client.span.finished')
+      .map(event => event.payload?.span)
+      .filter(Boolean)
+      .filter(span => !selectedTraceId || span.traceId === selectedTraceId)
+      .sort((a, b) => (a.startedAtMs || 0) - (b.startedAtMs || 0));
+    return spans.slice(-80);
+  }, [selectedTraceId, timelineEvents]);
+
   return {
     refreshRuntimeInspector,
     runtimeControlPlane,
@@ -101,8 +117,10 @@ export function useRuntimeInspector({ rightPanelTab }) {
     runtimeTree,
     runtimeWorkers,
     selectedRuntimeTask,
+    selectedTraceId,
     setSelectedRuntimeTask,
     setTimelineEvents,
     timelineEvents,
+    traceSpans,
   };
 }

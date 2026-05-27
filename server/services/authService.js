@@ -37,9 +37,11 @@ function createAuthMiddleware({
     const configuredToken = String(env.OCTOPUS_API_TOKEN || '').trim();
     const remoteAddress = req.ip || req.socket?.remoteAddress || '';
 
-    if (!configuredToken && nodeEnv !== 'production' && allowLocalWithoutToken && isLocalAddress(remoteAddress)) {
-      res.set?.('X-Octopus-Auth', 'local-dev');
-      return next();
+    // 🔒 Security: Local bypass disabled — always require a valid token
+    // Previously allowed unauthenticated access from localhost in dev mode
+    if (!configuredToken && allowLocalWithoutToken && isLocalAddress(remoteAddress)) {
+      console.warn('⚠️ OCTOPUS_ALLOW_LOCAL_NO_AUTH=1 but no OCTOPUS_API_TOKEN set — denying access');
+      return res.status(401).json({ success: false, error: 'Unauthorized — set OCTOPUS_API_TOKEN to enable access' });
     }
 
     const clientToken = String(getClientToken(req)).trim();

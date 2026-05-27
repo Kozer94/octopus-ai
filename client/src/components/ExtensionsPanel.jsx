@@ -1,17 +1,60 @@
+import { useRef, useState } from 'react';
+
+function getExtensionListKey(extension, index) {
+  return [
+    extension.namespace || extension.publisher || 'unknown',
+    extension.name || extension.id || extension.displayName || 'extension',
+    extension.version || extension.timestamp || index,
+    index,
+  ].join(':');
+}
+
 export function ExtensionsPanel({
   extSearchQuery,
   extSearchResults,
   extSearching,
   installExtension,
+  installLocalVsix,
   isExtensionInstalled,
   onQueryChange,
   onSelectExtension,
   searchExtensions,
   t,
 }) {
+  const fileInputRef = useRef(null);
+  const searchTimerRef = useRef(null);
+  const [localInstalling, setLocalInstalling] = useState(false);
+
+  async function handleLocalVsixChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLocalInstalling(true);
+    try {
+      await installLocalVsix(file);
+    } finally {
+      setLocalInstalling(false);
+      event.target.value = '';
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
       <div style={{ padding: '8px 10px', borderBottom: `0.5px solid ${t.border}` }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".vsix"
+          onChange={handleLocalVsixChange}
+          style={{ display: 'none' }}
+        />
+        <button
+          disabled={localInstalling}
+          onClick={() => fileInputRef.current?.click()}
+          style={{ width: '100%', marginBottom: 8, background: localInstalling ? t.border : t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '7px 10px', fontSize: 12, cursor: localInstalling ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+        >
+          <i className={`codicon ${localInstalling ? 'codicon-loading' : 'codicon-cloud-upload'}`} style={{ fontSize: 12 }} />
+          {localInstalling ? 'Installing local VSIX...' : 'Install Local VSIX'}
+        </button>
         <input
           aria-label="Search extensions"
           autoComplete="off"
@@ -19,8 +62,12 @@ export function ExtensionsPanel({
           placeholder="Search extensions..."
           value={extSearchQuery}
           onChange={e => {
-            onQueryChange(e.target.value);
-            searchExtensions(e.target.value);
+            const query = e.target.value;
+            onQueryChange(query);
+            clearTimeout(searchTimerRef.current);
+            searchTimerRef.current = setTimeout(() => {
+              searchExtensions(query);
+            }, 350);
           }}
           dir="auto"
         />
@@ -43,9 +90,9 @@ export function ExtensionsPanel({
         {!extSearching && extSearchResults.length === 0 && extSearchQuery !== '' && (
           <p style={{ fontSize: 11, color: t.textMuted, padding: 10 }}>No results found</p>
         )}
-        {extSearchResults.map((extension) => (
+        {extSearchResults.map((extension, index) => (
           <div
-            key={extension.id || extension.name || extension.displayName}
+            key={getExtensionListKey(extension, index)}
             style={{
               padding: '8px 12px',
               cursor: 'pointer',
@@ -73,7 +120,7 @@ export function ExtensionsPanel({
               </div>
             </div>
             {isExtensionInstalled(extension.id) ? (
-              <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 500 }}>✓ Installed</span>
+              <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 500 }}>✓ Local</span>
             ) : (
               <button
                 style={{
@@ -90,7 +137,7 @@ export function ExtensionsPanel({
                   installExtension(extension);
                 }}
               >
-                Install
+                Install VSIX
               </button>
             )}
           </div>

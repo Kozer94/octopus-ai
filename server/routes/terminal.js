@@ -3,7 +3,8 @@ const {
   spawnCommand,
   terminateProcess,
 } = require('../services/terminalService');
-const { readObject, readString } = require('../services/inputValidation');
+const { readObject, readString, safeErrorMessage } = require('../services/inputValidation');
+const { CAPABILITIES } = require('../services/securityKernel');
 
 function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
   const mw = terminalLimiter || ((_, __, next) => next());
@@ -11,6 +12,16 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
   let terminalProcess = null;
 
   app.post('/api/terminal', mw, async (req, res) => {
+    // 🔐 Defense-in-depth: فحص إضافي (الـ Capability Guard المركزي يفحص أولاً)
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const auth = req.securityKernel.authorize(req, {
+        capability: CAPABILITIES.TERMINAL_EXECUTE,
+        resource: req.body?.cwd || req.body?.projectRoot,
+      });
+      if (!auth || auth.allowed !== true) {
+        return res.status(403).json({ success: false, error: auth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       const body = readObject(req.body, 'body');
       const command = readString(body.command, 'command', { required: true, max: 500 });
@@ -26,11 +37,21 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
       res.json(result);
     } catch (error) {
       eventBus?.publish('terminal.command.failed', { error: error.message }, { category: 'terminal', severity: 'error', source: 'terminalService' });
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: safeErrorMessage(error) });
     }
   });
 
   app.post('/api/terminal/stream', mw, async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const streamAuth = req.securityKernel.authorize(req, {
+        capability: CAPABILITIES.TERMINAL_STREAM,
+        resource: req.body?.cwd || req.body?.projectRoot,
+      });
+      if (!streamAuth || streamAuth.allowed !== true) {
+        return res.status(403).json({ success: false, error: streamAuth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       const body = readObject(req.body, 'body');
       const command = readString(body.command, 'command', { required: true, max: 500 });
@@ -88,11 +109,18 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
         }
       });
     } catch (error) {
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: safeErrorMessage(error) });
     }
   });
 
-  app.post('/api/terminal/interrupt', async (_req, res) => {
+  app.post('/api/terminal/interrupt', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const intAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.TERMINAL_INTERRUPT });
+      if (!intAuth || intAuth.allowed !== true) {
+        return res.status(403).json({ success: false, error: intAuth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       if (terminalProcess) {
         terminateProcess(terminalProcess);
@@ -103,11 +131,21 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
         res.json({ success: true, output: 'No terminal command is running' });
       }
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ success: false, error: safeErrorMessage(error) });
     }
   });
 
   app.post('/api/run', mw, async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const runAuth = req.securityKernel.authorize(req, {
+        capability: CAPABILITIES.TERMINAL_EXECUTE,
+        resource: req.body?.cwd || req.body?.projectRoot,
+      });
+      if (!runAuth || runAuth.allowed !== true) {
+        return res.status(403).json({ success: false, error: runAuth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       const body = readObject(req.body, 'body');
       const command = readString(body.command, 'command', { required: true, max: 500 });
@@ -135,11 +173,18 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
       }, 5000);
 
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ success: false, error: safeErrorMessage(error) });
     }
   });
 
-  app.post('/api/stop', async (_req, res) => {
+  app.post('/api/stop', async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const stopAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.TERMINAL_INTERRUPT });
+      if (!stopAuth || stopAuth.allowed !== true) {
+        return res.status(403).json({ success: false, error: stopAuth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       if (runningProcess) {
         terminateProcess(runningProcess);
@@ -150,7 +195,7 @@ function registerTerminalRoutes(app, { eventBus, terminalLimiter } = {}) {
         res.json({ success: true, output: 'لا توجد عملية شغّالة' });
       }
     } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+      res.status(500).json({ success: false, error: safeErrorMessage(error) });
     }
   });
 }

@@ -7,6 +7,7 @@ const MAX_PAYLOAD_BYTES = 64 * 1024;
 const EVENT_SCHEMA_VERSION = 1;
 const EVENT_CATEGORIES = new Set([
   'ai',
+  'client',
   'event',
   'execution',
   'file',

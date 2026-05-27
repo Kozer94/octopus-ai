@@ -10,6 +10,8 @@ const elements = {
   engineerSummary: document.querySelector('#engineerSummary'),
   domIssues: document.querySelector('#domIssues'),
   domSummary: document.querySelector('#domSummary'),
+  runtimeErrors: document.querySelector('#runtimeErrors'),
+  runtimeSummary: document.querySelector('#runtimeSummary'),
   refresh: document.querySelector('#refreshBtn'),
   domAudit: document.querySelector('#domAuditBtn'),
   domFix: document.querySelector('#domFixBtn'),
@@ -21,8 +23,35 @@ let latestDomPayload = null;
 let engineerMemoryCache = null;
 let lastEngineerSyncToken = '';
 let domAuditPending = false;
+let runtimePollTimer = null;
+let runtimePollBackoffUntil = 0;
 const ENGINEER_MEMORY_KEY = 'octopus-engineer-hud-memory';
 const SEVERITY_WEIGHT = { critical: 0, major: 1, minor: 2, info: 3 };
+const CLIENT_EVENT_LIMIT = 80;
+const RUNTIME_POLL_INTERVAL_MS = 5000;
+const RUNTIME_POLL_BACKOFF_MS = 30000;
+const RUNTIME_VISIBLE_TYPES = new Set([
+  'client.console.error',
+  'client.console.warning',
+  'client.error',
+  'client.network.error',
+  'client.network.warning',
+  'client.promise.unhandled',
+  'client.react.error',
+  'client.resource.error',
+]);
+
+function ensureLastPatchState(source = 'hud') {
+  if (!window.__OCTOPUS_LAST_PATCH__) {
+    window.__OCTOPUS_LAST_PATCH__ = {
+      status: 'skipped',
+      source,
+      changed: false,
+      message: 'No patch operation has run yet.',
+      at: new Date().toISOString(),
+    };
+  }
+}
 
 function readStoredPayload() {
   try {
@@ -65,6 +94,121 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function getApiToken() {
+  return window.__OCTOPUS_TOKEN__ || localStorage.getItem('octopusApiToken') || '';
+}
+
+function getEventSeverity(event) {
+  return event?.severity || event?.metadata?.severity || 'info';
+}
+
+function formatRuntimeType(type = '') {
+  return type.replace(/^client\./, '').replaceAll('.', ' ');
+}
+
+function shortUrl(value = '') {
+  const text = String(value || '');
+  try {
+    const url = new URL(text, window.location.href);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return text.replace(/^https?:\/\/[^/]+/, '') || text;
+  }
+}
+
+function parseStackLocation(stack = '') {
+  const lines = String(stack || '').split(/\r?\n/);
+  for (const line of lines) {
+    const match = line.match(/(?:\(|\s)(https?:\/\/[^)\s]+):(\d+):(\d+)\)?/);
+    if (match) {
+      return {
+        file: shortUrl(match[1]),
+        line: match[2],
+        column: match[3],
+      };
+    }
+  }
+  return null;
+}
+
+function getRuntimeLocation(event) {
+  const payload = event?.payload || {};
+  if (payload.filename || payload.line || payload.column) {
+    return {
+      file: shortUrl(payload.filename || payload.url || ''),
+      line: payload.line || '',
+      column: payload.column || '',
+    };
+  }
+  return parseStackLocation(payload.error?.stack || payload.callStack || payload.componentStack || '');
+}
+
+function getRuntimeMessage(event) {
+  const payload = event?.payload || {};
+  if (payload.error?.message) return payload.error.message;
+  if (payload.message) return payload.message;
+  if (payload.status) return `${payload.status} ${payload.statusText || ''}`.trim();
+  if (Array.isArray(payload.args)) {
+    return payload.args.map(arg => {
+      if (typeof arg === 'string') return arg;
+      if (arg?.message) return arg.message;
+      try {
+        return JSON.stringify(arg);
+      } catch {
+        return String(arg);
+      }
+    }).join(' ');
+  }
+  if (payload.target?.selector) return `Resource failed: ${payload.target.selector}`;
+  return 'Runtime event captured';
+}
+
+function getRuntimeStack(event) {
+  const payload = event?.payload || {};
+  return payload.error?.stack || payload.callStack || payload.componentStack || '';
+}
+
+function renderBreadcrumbs(breadcrumbs = []) {
+  const relevant = breadcrumbs
+    .filter(item => item.kind === 'click' || item.kind === 'fetch' || item.kind === 'resource-error')
+    .slice(-6);
+  if (relevant.length === 0) return '';
+  return relevant.map(item => {
+    const data = item.data || {};
+    if (item.kind === 'click') {
+      return `${new Date(item.at).toLocaleTimeString()} click ${data.target?.selector || data.target?.tag || 'element'} ${data.target?.text || ''}`.trim();
+    }
+    if (item.kind === 'fetch') {
+      return `${new Date(item.at).toLocaleTimeString()} fetch ${data.method || 'GET'} ${shortUrl(data.url || '')}`;
+    }
+    return `${new Date(item.at).toLocaleTimeString()} ${item.kind} ${data.target?.selector || ''}`.trim();
+  }).join('\n');
+}
+
+function normalizeUxStatus(value, fallback = 'success') {
+  const status = String(value || fallback).toLowerCase();
+  if (['success', 'applied', 'skipped'].includes(status)) return status;
+  if (['added', 'appended', 'replaced', 'changed'].includes(status)) return 'applied';
+  if (['noop', 'no-op', 'unchanged'].includes(status)) return 'skipped';
+  return fallback;
+}
+
+function formatUxStatus(status) {
+  const normalized = normalizeUxStatus(status);
+  const labels = {
+    success: 'Success',
+    applied: 'Applied',
+    skipped: 'Skipped',
+  };
+  return labels[normalized];
+}
+
+function renderStatusBadge(status, message = '') {
+  const normalized = normalizeUxStatus(status);
+  const title = message ? ` title="${escapeHtml(message)}"` : '';
+  return `<span class="badge status-${escapeHtml(normalized)}"${title}>${escapeHtml(formatUxStatus(normalized))}</span>`;
 }
 
 function normalizeIssue(source, result, scanToken) {
@@ -195,14 +339,43 @@ function renderEngineerQueue() {
         <button type="button" data-action="copy" data-key="${escapeHtml(issue.key)}">Copy Fix</button>
         <button type="button" data-action="ai-fix" data-key="${escapeHtml(issue.key)}">AI Fix</button>
       </div>
-      ${issue.aiProposal ? `<pre class="ai-proposal">${escapeHtml(formatProposal(issue.aiProposal))}</pre>` : ''}
+      ${issue.aiResult ? renderPatchPreview(issue.aiResult, issue.key) : ''}
     </article>
   `).join('');
 }
 
-function formatProposal(proposal) {
-  if (typeof proposal === 'string') return proposal;
-  return JSON.stringify(proposal, null, 2);
+function renderPatchPreview(result, issueKey) {
+  const confidence = result.confidence || 'low';
+  const confidenceClass = confidence === 'high' ? 'ok' : confidence === 'medium' ? 'minor' : 'major';
+  const patch = result.patch || {};
+  const code = escapeHtml(patch.code || '/* No code provided */');
+  const analysis = escapeHtml(result.analysis || '');
+  const savedTo = result.savedTo || '';
+  const fileAction = result.fileAction || '';
+  const filePreview = result.filePreview || '';
+  const operationStatus = result.fileStatus || result.previewStatus || result.status || 'success';
+  const operationMessage = result.fileMessage || result.previewMessage || result.message || '';
+  return `
+    <div class="ai-patch-preview">
+      <div class="ai-patch-header">
+        <span class="ai-patch-label">Groq AI Fix</span>
+        <div class="badge-row">
+          ${renderStatusBadge(operationStatus, operationMessage)}
+          <span class="badge ${escapeHtml(confidenceClass)}">${escapeHtml(confidence)} confidence</span>
+        </div>
+      </div>
+      ${analysis ? `<p class="ai-analysis">${analysis}</p>` : ''}
+      <pre class="ai-patch-code">${code}</pre>
+      ${operationMessage ? `<p class="ai-analysis">${escapeHtml(operationMessage)}</p>` : ''}
+      ${savedTo ? `<p class="ai-analysis">Target <code>${escapeHtml(savedTo)}</code> <span class="badge status-applied">${escapeHtml(fileAction || 'applied')}</span></p>` : ''}
+      ${filePreview ? `<pre class="ai-patch-code">${escapeHtml(filePreview)}</pre>` : ''}
+      <div class="ai-patch-actions">
+        <button type="button" data-action="patch-apply" data-key="${escapeHtml(issueKey)}">Preview</button>
+        <button type="button" data-action="patch-save" data-key="${escapeHtml(issueKey)}"${savedTo ? ' disabled' : ''}>${savedTo ? formatUxStatus(operationStatus) : 'Apply to file'}</button>
+        <button type="button" data-action="patch-copy" data-key="${escapeHtml(issueKey)}">Copy</button>
+      </div>
+    </div>
+  `;
 }
 
 function setDomAuditBusy(isBusy) {
@@ -286,9 +459,85 @@ function renderDomAudit(payload) {
   renderEngineerQueue();
 }
 
+function renderRuntimeErrors(events = []) {
+  const runtimeEvents = events
+    .filter(event => RUNTIME_VISIBLE_TYPES.has(event.type))
+    .filter(event => ['warning', 'error', 'critical'].includes(getEventSeverity(event)))
+    .sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
+    .slice(0, 20);
+
+  const critical = runtimeEvents.filter(event => getEventSeverity(event) === 'critical').length;
+  const errors = runtimeEvents.filter(event => getEventSeverity(event) === 'error').length;
+  const warnings = runtimeEvents.filter(event => getEventSeverity(event) === 'warning').length;
+  elements.runtimeSummary.textContent = `${runtimeEvents.length} shown / ${critical} critical / ${errors} errors / ${warnings} warnings`;
+
+  if (runtimeEvents.length === 0) {
+    elements.runtimeErrors.innerHTML = '<div class="empty">No runtime warnings or errors captured yet. Use the app, then press Refresh.</div>';
+    return;
+  }
+
+  elements.runtimeErrors.innerHTML = runtimeEvents.map(event => {
+    const severity = getEventSeverity(event);
+    const payload = event.payload || {};
+    const location = getRuntimeLocation(event);
+    const stack = getRuntimeStack(event);
+    const breadcrumbs = renderBreadcrumbs(payload.breadcrumbs || []);
+    const status = payload.status ? `<span>Status ${escapeHtml(payload.status)}</span>` : '';
+    const url = payload.url ? `<span>${escapeHtml(shortUrl(payload.url))}</span>` : '';
+    const file = location?.file ? `<span>File ${escapeHtml(location.file)}</span>` : '<span>File unknown</span>';
+    const line = location?.line ? `<span>Line ${escapeHtml(location.line)}</span>` : '<span>Line unknown</span>';
+    const column = location?.column ? `<span>Column ${escapeHtml(location.column)}</span>` : '';
+
+    return `
+      <article class="issue runtime-card ${escapeHtml(severity)}">
+        <div class="issue-title">
+          <h2>${escapeHtml(formatRuntimeType(event.type))}</h2>
+          <div class="badge-row">
+            <span class="badge source">client</span>
+            <span class="badge ${escapeHtml(severity)}">${escapeHtml(severity)}</span>
+          </div>
+        </div>
+        <p>${escapeHtml(getRuntimeMessage(event))}</p>
+        <div class="runtime-location">
+          ${file}
+          ${line}
+          ${column}
+          ${status}
+          ${url}
+        </div>
+        ${breadcrumbs ? `<pre class="runtime-breadcrumbs">${escapeHtml(breadcrumbs)}</pre>` : ''}
+        ${stack ? `<pre class="runtime-stack">${escapeHtml(stack)}</pre>` : ''}
+      </article>
+    `;
+  }).join('');
+}
+
+async function refreshRuntimeErrors() {
+  if (!elements.runtimeErrors) return;
+  if (Date.now() < runtimePollBackoffUntil) return;
+  try {
+    const response = await fetch(`http://localhost:3001/api/events?category=client&limit=${CLIENT_EVENT_LIMIT}`, {
+      headers: {
+        'X-Octopus-Token': getApiToken(),
+      },
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.error || `HTTP ${response.status}`);
+    runtimePollBackoffUntil = 0;
+    renderRuntimeErrors(data.events || []);
+  } catch (error) {
+    if (/429|طلبات كثيرة|Too Many Requests/i.test(error.message || '')) {
+      runtimePollBackoffUntil = Date.now() + RUNTIME_POLL_BACKOFF_MS;
+    }
+    elements.runtimeSummary.textContent = 'Unavailable';
+    elements.runtimeErrors.innerHTML = `<div class="empty">Could not load runtime errors: ${escapeHtml(error.message)}</div>`;
+  }
+}
+
 function requestUpdate() {
   render(readStoredPayload());
   renderDomAudit(readStoredDomPayload());
+  refreshRuntimeErrors();
   channel?.postMessage({ type: 'audit-request' });
 }
 
@@ -311,6 +560,24 @@ if (typeof BroadcastChannel !== 'undefined') {
 elements.refresh.addEventListener('click', requestUpdate);
 elements.domAudit.addEventListener('click', () => requestDomAudit(false));
 elements.domFix.addEventListener('click', () => requestDomAudit(true));
+window.__HUD_EVENTS_INSTANCES__ = window.__HUD_EVENTS_INSTANCES__ || {
+  runtimePollTimer: null,
+  startedAt: null,
+  starts: 0,
+};
+if (window.__HUD_EVENTS_INSTANCES__.runtimePollTimer) {
+  clearInterval(window.__HUD_EVENTS_INSTANCES__.runtimePollTimer);
+}
+runtimePollTimer = setInterval(refreshRuntimeErrors, RUNTIME_POLL_INTERVAL_MS);
+window.__HUD_EVENTS_INSTANCES__.runtimePollTimer = runtimePollTimer;
+window.__HUD_EVENTS_INSTANCES__.startedAt = new Date().toISOString();
+window.__HUD_EVENTS_INSTANCES__.starts += 1;
+window.addEventListener('beforeunload', () => {
+  clearInterval(runtimePollTimer);
+  if (window.__HUD_EVENTS_INSTANCES__?.runtimePollTimer === runtimePollTimer) {
+    window.__HUD_EVENTS_INSTANCES__.runtimePollTimer = null;
+  }
+});
 elements.engineerIssues.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
   if (!button) return;
@@ -342,20 +609,27 @@ elements.engineerIssues.addEventListener('click', async (event) => {
 
   if (button.dataset.action === 'ai-fix') {
     button.disabled = true;
-    button.textContent = 'Thinking...';
+    button.textContent = 'Analyzing...';
     try {
-      const response = await fetch('/api/hud/ai-fix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issue }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(data.error || 'AI fix failed');
+      const result = await window.HudWS.requestAIFix(issue);
+      window.__OCTOPUS_LAST_PATCH__ = {
+        status: normalizeUxStatus(result.status, 'success'),
+        source: 'hud-ai-fix',
+        changed: false,
+        ruleId: issue.id,
+        issueKey: issue.key,
+        patch: result.patch || null,
+        message: result.fallback ? 'Fallback patch generated successfully.' : 'Patch proposal generated successfully.',
+        at: new Date().toISOString(),
+      };
       const nextMemory = readEngineerMemory();
       nextMemory[issue.key] = {
         ...issue,
-        aiProposal: data.proposal,
-        aiCandidates: data.candidates || [],
+        aiResult: {
+          ...result,
+          status: normalizeUxStatus(result.status, 'success'),
+          message: result.fallback ? 'Fallback patch generated successfully.' : 'Patch proposal generated successfully.',
+        },
         aiProposedAt: Date.now(),
       };
       writeEngineerMemory(nextMemory);
@@ -370,5 +644,103 @@ elements.engineerIssues.addEventListener('click', async (event) => {
       }, 1500);
     }
   }
+
+  if (button.dataset.action === 'patch-copy') {
+    const code = issue.aiResult?.patch?.code || '';
+    await navigator.clipboard?.writeText(code);
+    button.textContent = 'Copied!';
+    setTimeout(() => { button.textContent = 'Copy'; }, 900);
+  }
+
+  if (button.dataset.action === 'patch-apply') {
+    const code = issue.aiResult?.patch?.code || '';
+    const result = window.HudWS?.applyPatchLive(code) || {
+      status: 'skipped',
+      message: 'Live preview channel is unavailable.',
+    };
+    window.__OCTOPUS_LAST_PATCH__ = {
+      ...result,
+      source: 'hud-preview',
+      ruleId: issue.id,
+      issueKey: issue.key,
+      code,
+      at: new Date().toISOString(),
+    };
+    const nextMemory = readEngineerMemory();
+    nextMemory[issue.key] = {
+      ...issue,
+      aiResult: {
+        ...issue.aiResult,
+        previewStatus: normalizeUxStatus(result.status, 'skipped'),
+        previewMessage: result.message || '',
+        previewedAt: Date.now(),
+      },
+    };
+    writeEngineerMemory(nextMemory);
+    lastEngineerSyncToken = getEngineerScanToken();
+    renderEngineerQueue();
+    button.textContent = formatUxStatus(result.status);
+    setTimeout(() => { button.textContent = 'Preview'; }, 1500);
+  }
+
+  if (button.dataset.action === 'patch-save') {
+    button.disabled = true;
+    button.textContent = 'Saving…';
+    try {
+      const patch = issue.aiResult?.patch || {};
+      const targetFile = patch.targetFile || 'client/src/index.css';
+      const result = await window.HudWS.applyPatchToFile(issue.id, patch, targetFile);
+      if (!result.success) throw new Error(result.error || 'Apply failed');
+      const status = normalizeUxStatus(result.status || result.action, result.changed ? 'applied' : 'skipped');
+      window.__OCTOPUS_LAST_PATCH__ = {
+        status,
+        source: 'hud-file-apply',
+        changed: result.changed === true,
+        ruleId: issue.id,
+        issueKey: issue.key,
+        targetFile,
+        action: result.action || '',
+        patch,
+        preview: result.preview || '',
+        message: result.message || '',
+        at: new Date().toISOString(),
+      };
+
+      const nextMemory = readEngineerMemory();
+      nextMemory[issue.key] = {
+        ...issue,
+        aiResult: {
+          ...issue.aiResult,
+          savedTo: status === 'applied' ? targetFile : '',
+          fileStatus: status,
+          fileAction: result.action || '',
+          fileMessage: result.message || '',
+          filePreview: result.preview || '',
+          savedAt: Date.now(),
+        },
+      };
+      writeEngineerMemory(nextMemory);
+      lastEngineerSyncToken = getEngineerScanToken();
+      renderEngineerQueue();
+    } catch (error) {
+      window.__OCTOPUS_LAST_PATCH__ = {
+        status: 'skipped',
+        source: 'hud-file-apply',
+        changed: false,
+        ruleId: issue.id,
+        issueKey: issue.key,
+        error: error.message,
+        message: 'Patch file apply was skipped because the request failed.',
+        at: new Date().toISOString(),
+      };
+      button.textContent = 'Skipped';
+      button.title = error.message;
+      setTimeout(() => {
+        button.disabled = false;
+        button.textContent = 'Apply to file';
+      }, 1500);
+    }
+  }
 });
 requestUpdate();
+ensureLastPatchState('hud');

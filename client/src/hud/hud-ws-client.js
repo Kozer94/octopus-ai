@@ -6,6 +6,18 @@ let ws = null;
 let reconnectTimer = null;
 let isConnected = false;
 
+function ensureLastPatchState(source = 'hud') {
+  if (!window.__OCTOPUS_LAST_PATCH__) {
+    window.__OCTOPUS_LAST_PATCH__ = {
+      status: 'skipped',
+      source,
+      changed: false,
+      message: 'No patch operation has run yet.',
+      at: new Date().toISOString(),
+    };
+  }
+}
+
 const handlers = {
   onLog: () => {},
   onHistory: () => {},
@@ -133,6 +145,100 @@ function cap(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+function collectAffectedElements(issue, limit = 5) {
+  const examples = Array.isArray(issue.examples) ? issue.examples : [];
+  return examples.slice(0, limit).map(example => ({
+    tag: String(example.tagName || example.tag || 'element').slice(0, 40),
+    className: String(example.className || '').slice(0, 200),
+    inlineStyle: example.style ? JSON.stringify(example.style).slice(0, 300) : '',
+    textContent: String(example.text || example.textContent || '').slice(0, 120),
+    rect: example.rect || null,
+  }));
+}
+
+async function requestAIFix(issue) {
+  const elements = collectAffectedElements(issue);
+  const response = await fetch('http://localhost:3001/api/hud/ai-fix', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Octopus-Token': window.__OCTOPUS_TOKEN__ || localStorage.getItem('octopusApiToken') || '',
+    },
+    body: JSON.stringify({
+      ruleId: issue.id,
+      severity: issue.severity,
+      description: issue.message,
+      affected: issue.count || 0,
+      elements,
+      pageContext: {
+        url: window.location.href,
+        title: document.title,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  if (!data.success) throw new Error(data.error || 'AI fix failed');
+  return data;
+}
+
+async function applyPatchToFile(ruleId, patch, targetFile) {
+  const token = localStorage.getItem('octopusApiToken') || '';
+  const response = await fetch('http://localhost:3001/api/hud/apply-patch', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Octopus-Token': token,
+    },
+    body: JSON.stringify({ ruleId, patch, targetFile }),
+  });
+  return response.json();
+}
+
+function applyPatchLive(code) {
+  if (typeof code !== 'string' || !code.trim()) {
+    window.__OCTOPUS_LAST_PATCH__ = {
+      status: 'skipped',
+      source: 'hud-preview',
+      changed: false,
+      code: '',
+      message: 'Patch preview skipped because no code was provided.',
+      at: new Date().toISOString(),
+    };
+    return window.__OCTOPUS_LAST_PATCH__;
+  }
+  try {
+    const patch = {
+      status: 'applied',
+      source: 'hud-preview',
+      changed: true,
+      code,
+      message: 'Patch preview applied to the live page.',
+      at: new Date().toISOString(),
+    };
+    const ch = new BroadcastChannel('octopus-audit-hud');
+    ch.postMessage({ type: 'css-patch-apply', code, patch });
+    ch.close();
+    window.__OCTOPUS_LAST_PATCH__ = patch;
+    return patch;
+  } catch {
+    window.__OCTOPUS_LAST_PATCH__ = {
+      status: 'skipped',
+      source: 'hud-preview',
+      changed: false,
+      code,
+      message: 'Patch preview skipped because the live channel is unavailable.',
+      at: new Date().toISOString(),
+    };
+    return window.__OCTOPUS_LAST_PATCH__;
+  }
+}
+
 const HudWS = {
   connect,
   disconnect,
@@ -143,7 +249,11 @@ const HudWS = {
   get connected() {
     return isConnected;
   },
+  requestAIFix,
+  applyPatchLive,
+  applyPatchToFile,
 };
 
 window.HudWS = HudWS;
+ensureLastPatchState('hud');
 setTimeout(connect, 500);

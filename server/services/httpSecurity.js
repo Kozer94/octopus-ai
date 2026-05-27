@@ -17,7 +17,9 @@ function getAllowedOrigins(extraOrigins = createEnvReader().get('ALLOWED_ORIGINS
 }
 
 function isAllowedCorsOrigin(origin, allowedOrigins = getAllowedOrigins()) {
-  return !origin || allowedOrigins.has(origin);
+  // 🔒 رفض origin الفارغ لمنع CSRF attacks
+  if (!origin) return false;
+  return allowedOrigins.has(origin);
 }
 
 function createCorsOptions(allowedOrigins = getAllowedOrigins()) {

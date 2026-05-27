@@ -338,9 +338,47 @@ dev-hud.html
 - الـ client يعيد الاتصال تلقائياً كل 3 ثواني عند الانقطاع
 - الـ `hudLog` آمن للاستدعاء قبل `initHudWS()` — يحتفظ بالـ history
 
-### AI Fix Proposal
+### AI Fix Proposal (مُحدَّث — Groq AI Fix Engine v2)
 
-- endpoint: `POST /api/hud/ai-fix`
-- المدخلات: `{ issue }` من Engineer HUD، مع `examples` من DOM Audit
-- السلوك: يبحث السيرفر عن ملفات مرشحة داخل `client/src` ثم يطلب من AI اقتراح patch نصي
-- القاعدة: لا يتم تطبيق أي patch تلقائياً؛ يعرض HUD الاقتراح للمراجعة فقط
+- endpoint: `POST /api/hud/ai-fix` — ملف: `server/routes/hudAiFix.js`
+- المدخلات الجديدة: `{ ruleId, severity, description, affected, elements, pageContext }`
+- المدخلات القديمة (legacy): `{ issue }` — مدعومة للتوافق
+- السلوك: يرسل DOM elements المتأثرة لـ Groq مع system prompt متخصص، يعيد JSON patch دقيق
+- Timeout: 15 ثانية، fallback تلقائي إلى `FALLBACK_PATCHES` عند فشل Groq
+- الاستجابة: `{ success, ruleId, analysis, patch: { type, selector, property, oldValue, newValue, code, safe, sideEffects }, confidence }`
+- القاعدة: لا يتم تطبيق أي patch تلقائياً؛ "Apply (preview)" يحقن CSS مؤقتاً عبر BroadcastChannel فقط
+
+### Apply Patch to File — POST /api/hud/apply-patch
+
+- ملف: `server/routes/hudApplyPatch.js`
+- المدخلات: `{ ruleId, patch: { type, selector, property, oldValue, newValue, code }, targetFile }`
+- `targetFile` محدود تماماً داخل `client/src/**/*.css` — أي مسار خارجها يُرفض بـ 400
+- المنطق (ثلاث حالات):
+  1. `replaced` — selector موجود + property موجود → تعديل القيمة فقط
+  2. `added` — selector موجود لكن property غائب → حقن property قبل `}`
+  3. `appended` — selector غير موجود → إلحاق `code` كاملاً في نهاية الملف
+- الاستجابة: `{ success, changed, action, preview }` (preview = السطور المحيطة بالتغيير)
+- الأمان: path traversal محمي بـ `path.relative()` + `.css` extension فقط
+
+### Client Flow (Engineer HUD)
+
+```
+"AI Fix" button → HudWS.requestAIFix(issue) → POST /api/hud/ai-fix
+    → renderPatchPreview(result) في dev-hud.js
+    → Analysis text + code block + confidence badge + Preview / Apply to file / Copy
+
+"Preview" → HudWS.applyPatchLive(code) → BroadcastChannel css-patch-apply
+    → useLayoutAuditor.js يحقن <style> tag في document.head (مؤقت، بدون حفظ)
+
+"Apply to file" → HudWS.applyPatchToFile(ruleId, patch, targetFile) → POST /api/hud/apply-patch
+    → يكتب الـ CSS مباشرة في client/src (replaced / added / appended)
+    → badge يتغير لـ "Saved ✅" + عرض file preview (±12 سطر)
+    → targetFile = patch.targetFile || 'client/src/index.css'
+    → الـ server يسجل hudLog('ok', ...) → يظهر في Server Logs تلقائياً عبر WebSocket
+```
+
+### FALLBACK_PATCHES المدعومة
+
+`MISSING_TEXT_OVERFLOW`, `FONT_SIZE_TOO_SMALL`, `LOW_COLOR_CONTRAST`, `MISSING_ARIA_LABEL`,
+`HEAVY_ANIMATION`, `ANIMATION_PERF`, `GRID_MIN_WIDTH`, `FIXED_WIDTH_IN_FLEX`,
+`MISSING_ALT_TEXT`, `MISSING_FOCUS_STYLE`, `FORM_MISSING_LABEL`, `Z_INDEX_CHAOS`, `RESPONSIVE_OVERFLOW`

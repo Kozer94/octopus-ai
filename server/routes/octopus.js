@@ -1,5 +1,6 @@
 const path = require('path');
 const { withTimeout } = require('../services/asyncControl');
+const { CAPABILITIES } = require('../services/securityKernel');
 
 function registerOctopusRoutes(app, {
   aiLimiter,
@@ -85,6 +86,13 @@ function registerOctopusRoutes(app, {
   });
 
   app.post('/api/octopus', aiLimiter, async (req, res) => {
+    // 🔐 Defense-in-depth
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const chatAuth = req.securityKernel.authorize(req, { capability: CAPABILITIES.AI_CHAT });
+      if (!chatAuth || chatAuth.allowed !== true) {
+        return res.status(403).json({ success: false, error: chatAuth?.reason || 'Forbidden by security policy', code: 'FORBIDDEN_BY_POLICY' });
+      }
+    }
     try {
       const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '' } = req.body;
       const sessionId = (typeof rawSessionId === 'string' ? rawSessionId : 'default').slice(0, 128).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'default';
@@ -106,11 +114,17 @@ function registerOctopusRoutes(app, {
           : '';
 
         let fullCommand = projectMapContext
-          ? `خريطة المشروع والسياق الذكي:\n${projectMapContext}\n\nطلب المستخدم: ${command}`
+          ? `خريطة المشروع والسياق الذكي:\n${projectMapContext}\n\n--- USER REQUEST START ---
+${command.slice(0, 2000)}
+--- USER REQUEST END ---`
           : projectContext
-          ? `ملفات المشروع المفتوحة:\n${projectContext}\n\nالملف الحالي: ${activeFile}\n\nطلب المستخدم: ${command}`
+          ? `ملفات المشروع المفتوحة:\n${projectContext}\n\nالملف الحالي: ${activeFile}\n\n--- USER REQUEST START ---
+${command.slice(0, 2000)}
+--- USER REQUEST END ---`
           : activeFileContent
-            ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\nطلب المستخدم: ${command}`
+            ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\n--- USER REQUEST START ---
+${command.slice(0, 2000)}
+--- USER REQUEST END ---`
             : command;
 
         fullCommand = await executeHook('beforeSend', fullCommand);
@@ -133,7 +147,7 @@ function registerOctopusRoutes(app, {
 
       return sendQueued(res, job);
     } catch (error) {
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: require('../services/inputValidation').safeErrorMessage(error) });
     }
   });
 
@@ -181,7 +195,7 @@ function registerOctopusRoutes(app, {
 
       return sendQueued(res, job);
     } catch (error) {
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: require('../services/inputValidation').safeErrorMessage(error) });
     }
   });
 
@@ -221,7 +235,7 @@ function registerOctopusRoutes(app, {
 
       return sendQueued(res, job);
     } catch (error) {
-      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+      res.status(error.statusCode || 500).json({ success: false, error: require('../services/inputValidation').safeErrorMessage(error) });
     }
   });
 

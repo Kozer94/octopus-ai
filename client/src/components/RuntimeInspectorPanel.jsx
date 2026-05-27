@@ -16,6 +16,66 @@ function Metric({ label, value, t }) {
   );
 }
 
+function spanStatusColor(span, t) {
+  if (span.status === 'error') return '#f85149';
+  if (span.status === 'timeout') return '#d29922';
+  if ((span.durationMs || 0) >= 1000) return '#f0883e';
+  if (span.status === 'ok') return '#3fb950';
+  return t.textMuted;
+}
+
+function compactTraceId(traceId = '') {
+  if (!traceId) return 'no trace';
+  return traceId.length > 18 ? `${traceId.slice(0, 8)}...${traceId.slice(-6)}` : traceId;
+}
+
+function TraceWaterfall({ spans = [], traceId = '', t }) {
+  const firstStart = spans[0]?.startedAtMs || 0;
+  const lastEnd = spans.reduce((max, span) => {
+    const end = (span.startedAtMs || 0) + (span.durationMs || 0);
+    return Math.max(max, end);
+  }, firstStart + 1);
+  const totalMs = Math.max(1, Math.round(lastEnd - firstStart));
+  const slowest = spans.reduce((max, span) => Math.max(max, span.durationMs || 0), 0);
+  const errors = spans.filter(span => span.status === 'error' || span.status === 'timeout').length;
+
+  return (
+    <div style={{ background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: 8, marginBottom: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, marginBottom: 8 }}>
+        <Metric label="Spans" value={spans.length} t={t} />
+        <Metric label="Trace ms" value={totalMs} t={t} />
+        <Metric label="Issues" value={errors} t={t} />
+      </div>
+      <p title={traceId} style={{ color: t.textMuted, fontSize: 10, margin: '0 0 8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {compactTraceId(traceId)}
+      </p>
+      {spans.length === 0 ? (
+        <p style={{ fontSize: 11, color: t.textMuted, margin: 0 }}>No client spans yet</p>
+      ) : spans.map(span => {
+        const left = Math.max(0, Math.min(96, (((span.startedAtMs || firstStart) - firstStart) / totalMs) * 100));
+        const width = Math.max(2, Math.min(100 - left, ((span.durationMs || 1) / totalMs) * 100));
+        const color = spanStatusColor(span, t);
+        const isBottleneck = slowest > 0 && (span.durationMs || 0) === slowest;
+        return (
+          <div key={span.spanId} style={{ marginBottom: 7 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 54px', gap: 7, alignItems: 'center', marginBottom: 3 }}>
+              <span title={span.name} style={{ color: isBottleneck ? color : t.text, fontSize: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {span.name}
+              </span>
+              <span style={{ color, fontSize: 10, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                {span.durationMs || 0}ms
+              </span>
+            </div>
+            <div style={{ position: 'relative', height: 8, background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 5, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', left: `${left}%`, width: `${width}%`, top: 1, bottom: 1, borderRadius: 4, background: color }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TreeNode({ node, t, depth = 0 }) {
   return (
     <div style={{ marginLeft: depth * 10, marginBottom: 6 }}>
@@ -41,6 +101,8 @@ export function RuntimeInspectorPanel({
   replay,
   tasks,
   trace,
+  traceId,
+  traceSpans,
   tree,
   t,
   workers,
@@ -91,6 +153,9 @@ export function RuntimeInspectorPanel({
             </div>
           ))}
         </div>
+
+        <p style={{ fontSize: 10, color: t.textMuted, margin: '0 0 6px', textTransform: 'uppercase' }}>Client Trace Waterfall</p>
+        <TraceWaterfall spans={traceSpans || []} traceId={traceId} t={t} />
 
         <p style={{ fontSize: 10, color: t.textMuted, margin: '0 0 6px', textTransform: 'uppercase' }}>Control Plane</p>
         <div style={{ background: t.bg, border: `0.5px solid ${t.border}`, borderRadius: 6, padding: 8, marginBottom: 10 }}>

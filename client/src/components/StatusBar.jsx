@@ -37,7 +37,7 @@ export function StatusBar({
       {children}
       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>🐙 Octopus AI</span>
       <div style={{ flex: 1 }} />
-      <span dir="auto" style={bidiIsolateStyle({ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 })}>
+      <span dir="auto" style={bidiIsolateStyle({ fontSize: 12, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 })}>
         {displayFilePath(currentFile)} • {currentFile?.content?.split('\n').length || 0} lines
       </span>
       <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>UTF-8</span>

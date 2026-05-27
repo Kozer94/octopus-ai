@@ -102,10 +102,12 @@ export function RightPanel({
   legs,
   loading,
   messages,
+  onRepairExtensionShim,
   onResizeStart,
   onTimelineClear,
   projectName,
   reset,
+  repairingShimFor,
   rightPanelOpen,
   rightPanelTab,
   rightPanelWidth,
@@ -119,6 +121,7 @@ export function RightPanel({
   runtimeWorkers,
   send,
   selectedRuntimeTask,
+  selectedTraceId,
   setActiveFile,
   setInput,
   setSelectedRuntimeTask,
@@ -126,6 +129,7 @@ export function RightPanel({
   setRightPanelTab,
   t,
   timelineEvents,
+  traceSpans,
   auditResults,
   onAuditRun,
   onRuntimeRefresh,
@@ -248,6 +252,8 @@ export function RightPanel({
             selectedTask={selectedRuntimeTask}
             tasks={runtimeTasks}
             trace={runtimeTrace}
+            traceId={selectedTraceId}
+            traceSpans={traceSpans}
             replay={runtimeReplay}
             tree={runtimeTree}
             t={t}
@@ -261,6 +267,8 @@ export function RightPanel({
               {messages.map((message) => {
                 const meta = getChatMessageMeta(message);
                 const displayText = message.role === 'octopus' ? cleanChatText(message.text) : message.text;
+                const extensionFailure = message.extensionRuntimeFailure;
+                const isRepairingThisShim = extensionFailure?.extensionId && repairingShimFor === extensionFailure.extensionId;
                 return (
                 <div key={getMessageKey(message)} style={{ marginBottom: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
@@ -281,6 +289,16 @@ export function RightPanel({
                     </p>
                     {message.role === 'octopus' && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                        {extensionFailure && (
+                          <button
+                            disabled={isRepairingThisShim}
+                            onClick={() => onRepairExtensionShim?.(extensionFailure)}
+                            style={{ background: isRepairingThisShim ? t.border : '#f97316', border: 'none', borderRadius: 5, color: '#fff', cursor: isRepairingThisShim ? 'default' : 'pointer', fontSize: 10, padding: '3px 7px', fontWeight: 700 }}
+                          >
+                            <i className={`codicon ${isRepairingThisShim ? 'codicon-loading' : 'codicon-wand'}`} style={{ fontSize: 10, marginRight: 4 }} />
+                            {isRepairingThisShim ? 'Applying shim...' : 'Draft & apply shim'}
+                          </button>
+                        )}
                         <button
                           onClick={() => navigator.clipboard?.writeText(displayText)}
                           style={{ background: t.sidebar, border: `0.5px solid ${t.border}`, borderRadius: 5, color: t.textMuted, cursor: 'pointer', fontSize: 10, padding: '3px 7px' }}

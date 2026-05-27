@@ -263,6 +263,23 @@ function SpatialHome({ currentDir, displayFilePath, files, projectName, setActiv
   );
 }
 
+const RUNTIME_ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001b\[[0-9;]*m`, 'g');
+
+function getRuntimeFailureSignal(runtimeStatus = {}) {
+  if (runtimeStatus.error) return stripRuntimeAnsi(runtimeStatus.error);
+  const logs = Array.isArray(runtimeStatus.logs) ? runtimeStatus.logs : [];
+  const failureLog = [...logs].reverse().find(log => {
+    const message = stripRuntimeAnsi(log?.message);
+    return log?.level === 'err'
+      || /activationFailed|ACTIVATE FAILED|TypeError|ReferenceError|is not a function|Cannot /.test(message);
+  });
+  return failureLog ? stripRuntimeAnsi(failureLog.message) : '';
+}
+
+function stripRuntimeAnsi(value = '') {
+  return String(value).replace(RUNTIME_ANSI_ESCAPE_PATTERN, '').trim();
+}
+
 export function EditorWorkspace({
   activeFile,
   currentFile,
@@ -270,6 +287,9 @@ export function EditorWorkspace({
   displayFilePath,
   editorRef,
   files,
+  activateExtension,
+  deactivateExtension,
+  onSuggestExtensionShim,
   installExtension,
   isExtensionInstalled,
   loadingFiles,
@@ -284,6 +304,7 @@ export function EditorWorkspace({
 }) {
   const hiddenTabCount = Math.max(0, files.length - 8);
   const isBinaryFile = isBinaryEditorFile(activeFile);
+  const runtimeFailureSignal = getRuntimeFailureSignal(selectedExtension?.runtimeStatus);
 
   return (
     <>
@@ -298,7 +319,7 @@ export function EditorWorkspace({
             <div
               key={fileId}
               title={fullDisplayPath}
-              style={{ padding: "6px 14px", fontSize: 12, cursor: "pointer", color: isActive ? t.text : t.textMuted, borderBottom: isActive ? `2px solid ${t.accent}` : `2px solid transparent`, background: isActive ? t.bg : 'transparent', whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 10, maxWidth: 240, flex: '0 0 auto', position: 'relative' }}
+              style={{ padding: "6px 14px", fontSize: 12, cursor: "pointer", color: isActive ? t.text : t.textMuted, borderBottom: isActive ? `2px solid ${t.accent}` : `2px solid transparent`, background: isActive ? t.bg : 'transparent', whiteSpace: "nowrap", display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 10, maxWidth: 240, flex: '0 0 auto', position: 'relative', overflow: 'hidden' }}
               onClick={() => setActiveFile(fileId)}
             >
               {loadingFiles?.has(fileId) && (
@@ -382,21 +403,82 @@ export function EditorWorkspace({
 
               <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
                 {isExtensionInstalled(selectedExtension.id) ? (
-                  <button
+                  <>
+                    <button
                     style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
                     onClick={() => uninstallExtension(selectedExtension.id)}
                   >
-                    ❌ Uninstall
+                    ❌ Remove local VSIX
                   </button>
+                    {selectedExtension.runtimeStatus?.state === 'active' ? (
+                      <button
+                        style={{ background: t.border, border: 'none', borderRadius: 6, color: t.text, padding: '12px 18px', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => deactivateExtension(selectedExtension.id)}
+                      >
+                        ⏹ Stop host
+                      </button>
+                    ) : (
+                      <button
+                        style={{ background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '12px 18px', fontSize: 14, cursor: 'pointer' }}
+                        onClick={() => activateExtension(selectedExtension.id)}
+                      >
+                        ▶ Activate shim
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <button
                     style={{ background: t.accent, border: 'none', borderRadius: 6, color: '#fff', padding: '12px 24px', fontSize: 14, cursor: 'pointer' }}
                     onClick={() => installExtension(selectedExtension)}
                   >
-                    📥 Install Extension
+                    📥 Install VSIX locally
                   </button>
                 )}
               </div>
+
+              {isExtensionInstalled(selectedExtension.id) && (
+                <div style={{ border: `0.5px solid ${t.border}`, borderRadius: 6, padding: 10, marginBottom: 20, color: t.textMuted, fontSize: 12, lineHeight: 1.5 }}>
+                  <strong style={{ color: t.text }}>Installed locally.</strong> VSIX is downloaded and registered in Octopus. Activation can use the fast experimental shim or the optional VS Code test-electron base when enabled on the server.
+                </div>
+              )}
+
+              {selectedExtension.runtimeStatus && (
+                <div style={{ border: `0.5px solid ${selectedExtension.runtimeStatus.state === 'failed' ? '#f85149' : t.border}`, borderRadius: 6, padding: 10, marginBottom: 20, color: t.textMuted, fontSize: 12, lineHeight: 1.5 }}>
+                  <strong style={{ color: t.text }}>Runtime:</strong> <span style={{ color: selectedExtension.runtimeStatus.state === 'failed' ? '#ff7b72' : t.textMuted }}>{selectedExtension.runtimeStatus.state || selectedExtension.activationStatus}</span>
+                  {selectedExtension.runtimeStatus.engine && (
+                    <span> • {selectedExtension.runtimeStatus.engine}</span>
+                  )}
+                  {selectedExtension.runtimeStatus.commands?.length > 0 && (
+                    <span> • {selectedExtension.runtimeStatus.commands.length} command(s) registered</span>
+                  )}
+                  {runtimeFailureSignal && (
+                    <div dir="auto" style={{ color: '#ff7b72', marginTop: 6 }}>
+                      {runtimeFailureSignal}
+                    </div>
+                  )}
+                  {selectedExtension.runtimeStatus.state === 'failed' && (
+                    <button
+                      style={{ display: 'block', marginTop: 10, background: t.accent, border: 'none', borderRadius: 5, color: '#fff', padding: '7px 10px', fontSize: 12, cursor: 'pointer' }}
+                      onClick={() => onSuggestExtensionShim?.(selectedExtension)}
+                    >
+                      Ask Octopus to draft shim
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {selectedExtension.capabilities?.length > 0 && (
+                <div style={{ marginBottom: 24 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: t.text, marginBottom: 12 }}>Detected VSIX capabilities</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {selectedExtension.capabilities.map(capability => (
+                      <span key={capability.type} style={{ background: t.border, padding: '4px 10px', borderRadius: 12, fontSize: 12, color: t.textMuted }}>
+                        {capability.type}: {capability.count}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {selectedExtension.tags && selectedExtension.tags.length > 0 && (
                 <div style={{ marginBottom: 24 }}>

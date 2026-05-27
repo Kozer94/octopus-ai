@@ -38,9 +38,12 @@ const { loadJsonFile, replaceObjectContents, saveJsonFile } = require('./service
 const { createPackageIconResolver } = require('./services/packageIconService');
 const { registerPtyTerminalServer } = require('./services/ptyTerminalService');
 const { createSimplePluginRuntime } = require('./services/simplePluginRuntimeService');
+const { createExtensionHostService } = require('./services/extensionHostService');
+const { createShimPolyfillService } = require('./services/shimPolyfillService');
 const { appendTodoUpdate } = require('./services/todoLogService');
 const { createAuthMiddleware } = require('./services/authService');
 const { createRequestGuard } = require('./services/inputValidation');
+const { createSecurityKernel, CAPABILITIES, ROLES, PolicyRule } = require('./services/securityKernel');
 const { registerFileRoutes } = require('./routes/files');
 const { registerTerminalRoutes } = require('./routes/terminal');
 const { registerGitRoutes } = require('./routes/git');
@@ -55,7 +58,9 @@ const { registerOctopusRoutes } = require('./routes/octopus');
 const { registerEventRoutes } = require('./routes/events');
 const { registerRuntimeRoutes } = require('./routes/runtime');
 const { registerScanRoutes } = require('./routes/scan');
-const { registerHudRoutes } = require('./routes/hud');
+const { registerHudAiFixRoutes } = require('./routes/hudAiFix');
+const { registerHudApplyPatchRoutes } = require('./routes/hudApplyPatch');
+const { registerShimRoutes } = require('./routes/shim');
 const { initHudWS, hudLog, hudPluginUpdate } = require('./hud-ws');
 
 // Simple Plugin System - Module Exports Style
@@ -98,18 +103,217 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 process.on('uncaughtException', (err) => {
+  if (err?.code === 'EPERM' && err?.syscall === 'watch') {
+    console.warn(`⚠️ Ignored filesystem watch permission error: ${err.message}`);
+    return;
+  }
   console.error('❌ Uncaught Exception:', err);
   process.exitCode = 1;
 });
 
-const { aiLimiter, config: rateLimitConfig, limiter, mutationLimiter, terminalLimiter } = createApiRateLimiters(env);
+const {
+  aiLimiter,
+  config: rateLimitConfig,
+  eventsBurstGuard,
+  limiter,
+  mutationLimiter,
+  terminalLimiter,
+} = createApiRateLimiters(env);
 
 app.use(cors(createCorsOptions()));
 app.use(express.json());
 app.use(limiter);
 app.use('/api', createAuthMiddleware());
 app.use('/api', createRequestGuard());
+app.use(eventsBurstGuard);
 app.use('/api', mutationLimiter);
+
+// ═══════════════════════════════════════════════════════════
+// 🔐 Security Kernel — نظام الأمان المركزي
+// ═══════════════════════════════════════════════════════════
+const securityKernel = createSecurityKernel({
+  // ─── Governance Layer — الحوكمة والمرونة المُحكمة ───
+  const { createScopedTokenResolvers, ElevationStore } = require('./services/governanceLayer');
+  const elevationStore = new ElevationStore();
+
+  // ─── Identity Resolvers — تدرج في الصلاحيات ───
+  identityResolvers: [
+    // 🔑 Scoped tokens (أولوية — من OCTOPUS_TOKEN_DEV, OCTOPUS_TOKEN_VIEWER, etc.)
+    ...createScopedTokenResolvers(process.env),
+    // 🔑 Legacy admin token (OCTOPUS_API_TOKEN)
+    (req) => {
+      const token = req.get?.('X-Octopus-Token') || req.get?.('Authorization')?.replace(/^Bearer\s+/i, '') || '';
+      const configuredToken = String(env.get('OCTOPUS_API_TOKEN', '')).trim();
+      if (configuredToken && token && token === configuredToken) {
+        return { type: 'token', name: 'legacy-admin', role: 'admin', capabilities: ROLES.admin.capabilities };
+      }
+      return null;
+    },
+  ],
+
+  // ─── Policy Rules — قواعد السياسة المركزية ───
+  policies: [
+    // 🔴 قاعدة 1: منع أي وصول من مصدر غير محلي بدون token
+    new PolicyRule({
+      name: 'deny-remote-without-token',
+      priority: 100,
+      condition: ({ identity, req }) => {
+        const remoteAddress = req.ip || req.socket?.remoteAddress || '';
+        const isLocal = ['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'].includes(String(remoteAddress));
+        return !isLocal && identity.type === 'anonymous';
+      },
+      effect: 'deny',
+    }),
+    // 🔴 قاعدة 2: منع تثبيت حزم في وضع الإنتاج بدون صلاحية admin
+    new PolicyRule({
+      name: 'deny-package-install-non-admin-production',
+      priority: 90,
+      condition: ({ identity, capability }) => {
+        if (capability !== CAPABILITIES.PACKAGE_INSTALL) return false;
+        if (process.env.NODE_ENV !== 'production') return false;
+        if (identity.role === 'admin') return false;
+        if (elevationStore.hasElevation(identity, capability)) return false;
+        return true;
+      },
+      effect: 'deny',
+    }),
+    // 🟡 قاعدة 3: منع عمليات terminal الخطيرة حتى مع الصلاحية
+    new PolicyRule({
+      name: 'deny-dangerous-terminal-commands',
+      priority: 80,
+      condition: ({ capability, req, identity }) => {
+        if (capability !== CAPABILITIES.TERMINAL_EXECUTE) return false;
+        if (identity.role === 'admin') return false;
+        if (elevationStore.hasElevation(identity, capability)) return false;
+        const cmd = req.body?.command || '';
+        return /\b(rm\s+-rf|format|shutdown|reboot|del\s+\/f)\b/i.test(cmd);
+      },
+      effect: 'deny',
+    }),
+    // 🟡 قاعدة 4: منع كتابة ملفات النظام
+    new PolicyRule({
+      name: 'deny-system-file-write',
+      priority: 70,
+      condition: ({ capability, resource, identity }) => {
+        if (capability !== CAPABILITIES.FILE_WRITE || !resource) return false;
+        if (identity.role === 'admin') return false;
+        if (elevationStore.hasElevation(identity, capability)) return false;
+        const normalized = String(resource).replace(/\\/g, '/').toLowerCase();
+        const systemPaths = ['server/services/authservice', 'server/services/securitykernel',
+          'server/services/httpssecurity', 'server/services/terminalservice',
+          'server/services/pluginsandbox', 'server/services/protectedfiles',
+          'server/services/governancelayer', 'server/services/routecapabilitymap',
+          'server/index.js', 'server/validatorlayer', 'server/truthlayer'];
+        return systemPaths.some(p => normalized.includes(p));
+      },
+      effect: 'deny',
+    }),
+  ],
+});
+
+// ─── Resource Guards — حماية الموارد ───
+const { isProtectedFile, isSensitiveProtectedFile } = require('./services/protectedFiles');
+const { FORBIDDEN_PATH_PATTERNS } = require('./validatorLayer');
+
+// حماية كتابة الملفات — منع الكتابة على ملفات النظام والملفات الحساسة
+securityKernel.registerResourceGuard(CAPABILITIES.FILE_WRITE, (filePath, identity) => {
+  if (identity.role === 'admin') return { allowed: true }; // admin يتجاوز حماية الملفات
+  if (isProtectedFile(filePath) || isSensitiveProtectedFile(filePath)) {
+    return { allowed: false, reason: `File is protected: ${path.basename(filePath)}` };
+  }
+  return { allowed: true };
+});
+
+// حماية تثبيت الحزم — منع الحزم ذات الأسماء المشبوهة
+securityKernel.registerResourceGuard(CAPABILITIES.PACKAGE_INSTALL, (packageName, identity) => {
+  if (identity.role === 'admin') return { allowed: true };
+  const suspicious = /^(octopus-security|octopus-auth|octopus-admin|octopus-system)/i;
+  if (suspicious.test(packageName)) {
+    return { allowed: false, reason: `Package name "${packageName}" is suspicious` };
+  }
+  return { allowed: true };
+});
+
+// حماية Terminal — منع الأوامر خارج مجلد المشروع
+securityKernel.registerResourceGuard(CAPABILITIES.TERMINAL_EXECUTE, (cwd, identity) => {
+  if (identity.role === 'admin') return { allowed: true };
+  const resolved = path.resolve(String(cwd || process.cwd()));
+  const isForbidden = FORBIDDEN_PATH_PATTERNS?.some(pattern => pattern.test(resolved));
+  if (isForbidden) {
+    return { allowed: false, reason: 'Working directory is in a forbidden system path' };
+  }
+  return { allowed: true };
+});
+
+// 🔐 Security Kernel middleware — يضاف بعد المصادقة وقبل الـ routes
+app.use('/api', (req, res, next) => {
+  req.securityKernel = securityKernel;
+  req.capabilities = CAPABILITIES;
+  next();
+});
+
+// 🔐 Route-Capability Guard — فحص صلاحيات مركزي تلقائي
+const { createCapabilityGuard } = require('./services/routeCapabilityMap');
+app.use('/api', createCapabilityGuard(securityKernel));
+
+// 🔒 Enforcement Layer — يمنع أي route يمر بدون فحص Security Kernel
+const ENFORCEMENT_SKIP_PATHS = new Set([
+  '/api/health',
+  '/api/rate-limits',
+  '/',
+]);
+
+app.use('/api', (req, res, next) => {
+  if (ENFORCEMENT_SKIP_PATHS.has(req.path)) {
+    req._capabilityChecked = true;
+    return next();
+  }
+
+  // لو الـ route فُحص عبر Capability Guard أو فحص يدوي → سمح
+  if (req._capabilityChecked) {
+    return next();
+  }
+
+  // 🔒 في وضع الإنتاج: نرفض أي route غير مسجل
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  if (nodeEnv === 'production') {
+    return res.status(403).json({
+      success: false,
+      error: `Route "${req.method} ${req.path}" is not registered with the security kernel`,
+      code: 'ROUTE_NOT_AUTHORIZED',
+    });
+  }
+
+  // تطوير: تحذير بدون منع
+  console.warn(`⚠️ [SecurityKernel] Unchecked route: ${req.method} ${req.path}`);
+  next();
+});
+
+// ═══════════════════════════════════════════════════════════
+// 🏛️ Governance Routes — واجهة الحوكمة
+// ═══════════════════════════════════════════════════════════
+const { SecurityDashboard: GovDashboard, registerGovernanceRoutes: registerGovRoutes } = require('./services/governanceLayer');
+const { listRouteCapabilities } = require('./services/routeCapabilityMap');
+
+const governanceDashboard = new GovDashboard({
+  securityKernel,
+  elevationStore,
+  routeCapabilityMap: listRouteCapabilities(),
+});
+
+// تمرير governance objects للـ routes
+registerGovRoutes(app, {
+  securityKernel,
+  elevationStore,
+  dashboard: governanceDashboard,
+  routeCapabilities: listRouteCapabilities(),
+});
+
+// Level 3 — Trace ID propagation: يربط كل server event بالـ client request الأصلي
+app.use('/api', (req, _res, next) => {
+  req.traceId = req.headers['x-trace-id'] || null;
+  next();
+});
 
 // تخزين تاريخ المحادثات لكل جلسة (TTL=30min, max=500)
 const { createSessionStore } = require('./services/sessionStore');
@@ -152,6 +356,12 @@ const simplePluginRuntime = createSimplePluginRuntime({
   },
 });
 const { executeHook, getEnabledPlugins, loadSimplePlugins } = simplePluginRuntime;
+const extensionHost = createExtensionHostService({
+  installedNpmPackages,
+  saveNpmPackages,
+  rootDir: path.join(__dirname, '..'),
+});
+const shimPolyfills = createShimPolyfillService();
 
 const saveTaggedFiles = createTaggedFileSaver({
   appendTodoUpdate,
@@ -197,6 +407,7 @@ registerGitRoutes(app);
 registerPluginManagerRoutes(app, { pluginManager, pluginsDir });
 registerSimplePluginRoutes(app, { loadedPlugins, pluginsDir, pluginsState, savePluginsState });
 registerPackageRoutes(app, {
+  extensionHost,
   getPackageIcon,
   installedNpmPackages,
   saveNpmPackages,
@@ -206,7 +417,9 @@ registerMarketplaceRoutes(app, { marketplace, pluginManager });
 registerEventRoutes(app, { eventBus });
 registerRuntimeRoutes(app, { eventBus, taskRuntime });
 registerScanRoutes(app);
-registerHudRoutes(app, { callAI, rootDir: path.join(__dirname, '..') });
+registerHudAiFixRoutes(app, { callAI });
+registerHudApplyPatchRoutes(app, { rootDir: path.join(__dirname, '..') });
+registerShimRoutes(app, { shimPolyfills });
 
 const server = app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);

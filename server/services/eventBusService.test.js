@@ -63,6 +63,15 @@ test('history is capped and can be filtered by taxonomy fields and sinceId', () 
   assert.deepEqual(bus.getRecent({ sinceId: 2 }).map(event => event.id), [3, 4]);
 });
 
+test('client telemetry keeps a first-class client category', () => {
+  const bus = createEventBus({ logger: silentLogger });
+  const event = bus.publish('client.error', { message: 'boom' }, { category: 'client', source: 'client-telemetry' });
+
+  assert.equal(event.category, 'client');
+  assert.equal(event.source, 'client-telemetry');
+  assert.deepEqual(bus.getRecent({ category: 'client' }).map(item => item.type), ['client.error']);
+});
+
 test('subscribe receives future events and optional replay', () => {
   const bus = createEventBus({ logger: silentLogger });
   bus.publish('file.written', { path: 'a.js' });

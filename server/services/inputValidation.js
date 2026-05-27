@@ -70,6 +70,33 @@ function readPackageName(value, fieldName = 'packageName') {
   });
 }
 
+// 🔒 تعميم رسائل الخطأ في الإنتاج لمنع تسريب معلومات حساسة
+const SAFE_ERROR_MESSAGES = {
+  400: 'طلب غير صالح',
+  401: 'غير مصرح',
+  403: 'محظور',
+  404: 'غير موجود',
+  413: 'الحمولة كبيرة جداً',
+  429: 'طلبات كثيرة جداً',
+  500: 'خطأ داخلي في الخادم',
+  504: 'انتهت المهلة',
+};
+
+function safeErrorMessage(error, nodeEnv = process.env.NODE_ENV || 'development') {
+  // في وضع التطوير نعرض الرسالة الحقيقية
+  if (nodeEnv === 'development') return error.message;
+
+  const status = error.statusCode || 500;
+
+  // الأخطاء المتوقعة (4xx) نعرض رسالتها الآمنة
+  if (status >= 400 && status < 500 && error.message) {
+    return error.message;
+  }
+
+  // أخطاء 5xx نعممها لمنع تسريب مسارات ملفات أو معلومات داخلية
+  return SAFE_ERROR_MESSAGES[status] || 'خطأ داخلي';
+}
+
 module.exports = {
   PACKAGE_NAME_PATTERN,
   createRequestGuard,
@@ -78,4 +105,5 @@ module.exports = {
   readPackageName,
   readString,
   rejectDangerousKeys,
+  safeErrorMessage,
 };

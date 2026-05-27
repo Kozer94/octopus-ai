@@ -502,6 +502,7 @@ function ensureProjectMapWatcher(projectDir) {
     },
     persistent: false,
     ignoreInitial: true,
+    ignorePermissionErrors: true,
     depth: MAX_DEPTH,
     awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 80 },
   });

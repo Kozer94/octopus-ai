@@ -26,5 +26,837 @@
     "icon": "https://open-vsx.org/api/Anthropic/claude-code/alpine-arm64/2.1.150/file/claude-logo.png",
     "namespace": "Anthropic",
     "source": "vsx"
+  },
+  "akash-cx.blackbox-debug": {
+    "id": "akash-cx.blackbox-debug",
+    "name": "blackbox-debug",
+    "displayName": "Blackbox",
+    "description": "AI-driven debugging — set breakpoints, start/stop debug sessions, inspect variables, and navigate code via MCP tools.",
+    "version": "0.1.2",
+    "installedAt": "2026-05-26T18:18:15.776Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/akash-cx/blackbox-debug/0.1.2/file/logo-128.png",
+    "namespace": "akash-cx",
+    "publisher": "akash-cx",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "downloaded-not-activated",
+    "localPath": "server/state/extensions/akash-cx.blackbox-debug/blackbox-debug-0.1.2.vsix",
+    "size": 3571165,
+    "downloadUrl": "https://open-vsx.org/api/akash-cx/blackbox-debug/0.1.2/file/akash-cx.blackbox-debug-0.1.2.vsix",
+    "manifest": {
+      "name": "blackbox-debug",
+      "displayName": "Blackbox",
+      "publisher": "akash-cx",
+      "version": "0.1.2",
+      "description": "AI-driven debugging — set breakpoints, start/stop debug sessions, inspect variables, and navigate code via MCP tools.",
+      "engines": {
+        "vscode": "^1.99.0"
+      },
+      "categories": [
+        "Debuggers",
+        "Other"
+      ],
+      "activationEvents": [
+        "onStartupFinished"
+      ],
+      "main": "./out/extension.js",
+      "browser": "",
+      "contributes": {
+        "commands": [],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": []
+  },
+  "Blackboxapp.blackboxagent": {
+    "id": "Blackboxapp.blackboxagent",
+    "name": "blackboxagent",
+    "displayName": "BLACKBOXAI Agent",
+    "description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
+    "version": "3.3.33",
+    "installedAt": "2026-05-26T21:58:07.189Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/Blackboxapp/blackboxagent/3.3.33/file/icon.png",
+    "namespace": "Blackboxapp",
+    "publisher": "Blackboxapp",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "activation-failed",
+    "localPath": "server/state/extensions/Blackboxapp.blackboxagent/blackboxagent-3.3.33.vsix",
+    "extractedPath": "server/state/extensions/Blackboxapp.blackboxagent/extracted",
+    "size": 13686754,
+    "downloadUrl": "https://open-vsx.org/api/Blackboxapp/blackboxagent/3.3.33/file/Blackboxapp.blackboxagent-3.3.33.vsix",
+    "manifest": {
+      "name": "blackboxagent",
+      "displayName": "BLACKBOXAI Agent",
+      "publisher": "Blackboxapp",
+      "version": "3.3.33",
+      "description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way.",
+      "engines": {
+        "vscode": "^1.84.0"
+      },
+      "categories": [
+        "AI",
+        "Other",
+        "Programming Languages",
+        "Snippets",
+        "Machine Learning",
+        "Education"
+      ],
+      "activationEvents": [
+        "onStartupFinished",
+        "onInlineCompletionRequest"
+      ],
+      "main": "./dist/extension.js",
+      "browser": "",
+      "contributes": {
+        "commands": [
+          {
+            "command": "blackbox.copyFileContent",
+            "title": "Copy File Content to Chat"
+          },
+          {
+            "command": "blackbox.inputBoxButtonClicked",
+            "title": "Promo Code"
+          },
+          {
+            "command": "blackbox.contactSupport",
+            "title": "Support"
+          },
+          {
+            "command": "blackbox.enableChatModeClicked",
+            "title": "Chat Mode"
+          },
+          {
+            "command": "blackbox.enableAgentModeClicked",
+            "title": "Chat Mode"
+          },
+          {
+            "command": "blackbox.popoutButtonClicked",
+            "title": "Open in Editor"
+          },
+          {
+            "command": "blackbox.settingsButtonClicked",
+            "title": "Settings"
+          },
+          {
+            "command": "blackbox.openInNewTab",
+            "title": "Right Panel"
+          },
+          {
+            "command": "blackbox.groupChatButtonClicked",
+            "title": "Messaging"
+          },
+          {
+            "command": "blackbox.multiTaskButtonClicked",
+            "title": "Multi-Task"
+          },
+          {
+            "command": "blackbox.toggleInlineCompletion",
+            "title": "Toggle Inline Completion",
+            "category": "Blackbox"
+          }
+        ],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": [
+      {
+        "type": "commands",
+        "count": 11
+      }
+    ],
+    "runtimeStatus": {
+      "state": "failed",
+      "commands": [],
+      "error": "or.window.registerUriHandler is not a function",
+      "stack": "TypeError: or.window.registerUriHandler is not a function\n    at Object.nka (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\Blackboxapp.blackboxagent\\extracted\\dist\\extension.js:5738:8087)\n    at main (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\runtime\\extensionHost\\extensionHost.js:95:29)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)",
+      "logs": [
+        {
+          "level": "host",
+          "message": "hostStarted",
+          "at": "2026-05-26T21:58:08.649Z"
+        },
+        {
+          "level": "out",
+          "message": "================================= {}\n",
+          "at": "2026-05-26T21:58:08.651Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:08.651Z"
+        },
+        {
+          "level": "out",
+          "message": "EXTENSION LOADING {}\nPATH {\n  entryPath: \u001b[32m'C:\\\\Users\\\\kozer\\\\Desktop\\\\octopus-ai\\\\server\\\\state\\\\extensions\\\\Blackboxapp.blackboxagent\\\\extracted\\\\dist\\\\extension.js'\u001b[39m\n}\n",
+          "at": "2026-05-26T21:58:08.653Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:08.653Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:08.653Z"
+        },
+        {
+          "level": "host",
+          "message": "textEditorDecorationType.create",
+          "at": "2026-05-26T21:58:09.179Z"
+        },
+        {
+          "level": "host",
+          "message": "textEditorDecorationType.create",
+          "at": "2026-05-26T21:58:09.179Z"
+        },
+        {
+          "level": "err",
+          "message": "(node:14740) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.\n(Use `node --trace-deprecation ...` to show where the warning was created)\n",
+          "at": "2026-05-26T21:58:09.481Z"
+        },
+        {
+          "level": "out",
+          "message": "MODULE { keys: [ \u001b[32m'activate'\u001b[39m, \u001b[32m'deactivate'\u001b[39m ] }\n",
+          "at": "2026-05-26T21:58:09.483Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:09.483Z"
+        },
+        {
+          "level": "out",
+          "message": "ACTIVATE FOUND {}\n",
+          "at": "2026-05-26T21:58:09.483Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:09.483Z"
+        },
+        {
+          "level": "host",
+          "message": "output",
+          "at": "2026-05-26T21:58:09.486Z"
+        },
+        {
+          "level": "host",
+          "message": "output",
+          "at": "2026-05-26T21:58:09.486Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.486Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.486Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.486Z"
+        },
+        {
+          "level": "host",
+          "message": "output",
+          "at": "2026-05-26T21:58:09.488Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.488Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.488Z"
+        },
+        {
+          "level": "host",
+          "message": "workspace.eventRegistered",
+          "at": "2026-05-26T21:58:09.488Z"
+        },
+        {
+          "level": "host",
+          "message": "webviewViewProvider.register",
+          "at": "2026-05-26T21:58:09.492Z"
+        },
+        {
+          "level": "err",
+          "message": "ACTIVATE FAILED\n",
+          "at": "2026-05-26T21:58:09.493Z"
+        },
+        {
+          "level": "err",
+          "message": "TypeError: or.window.registerUriHandler is not a function\n    at Object.nka \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\Blackboxapp.blackboxagent\\extracted\\\u001b[39mdist\\extension.js:5738:8087\u001b[90m)\u001b[39m\n    at main (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\runtime\\extensionHost\\extensionHost.js:95:29)\n\u001b[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\u001b[39m\n",
+          "at": "2026-05-26T21:58:09.495Z"
+        },
+        {
+          "level": "host",
+          "message": "activationFailed: or.window.registerUriHandler is not a function",
+          "at": "2026-05-26T21:58:09.495Z"
+        },
+        {
+          "level": "host",
+          "message": "exit 0",
+          "at": "2026-05-26T21:58:09.539Z"
+        }
+      ]
+    }
+  },
+  "Anthropic.claude-code": {
+    "id": "Anthropic.claude-code",
+    "name": "claude-code",
+    "displayName": "Claude Code for VS Code",
+    "description": "Claude Code for VS Code: Harness the power of Claude Code without leaving your IDE",
+    "version": "2.1.150",
+    "installedAt": "2026-05-26T18:28:57.211Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/Anthropic/claude-code/alpine-arm64/2.1.150/file/claude-logo.png",
+    "namespace": "Anthropic",
+    "publisher": "Anthropic",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "downloaded-not-activated",
+    "localPath": "server/state/extensions/Anthropic.claude-code/claude-code-2.1.150.vsix",
+    "size": 75012735,
+    "downloadUrl": "https://open-vsx.org/api/Anthropic/claude-code/alpine-arm64/2.1.150/file/Anthropic.claude-code-2.1.150@alpine-arm64.vsix",
+    "manifest": {
+      "name": "claude-code",
+      "displayName": "Claude Code for VS Code",
+      "publisher": "Anthropic",
+      "version": "2.1.150",
+      "description": "Claude Code for VS Code: Harness the power of Claude Code without leaving your IDE",
+      "engines": {
+        "vscode": "^1.94.0"
+      },
+      "categories": [
+        "AI",
+        "Chat"
+      ],
+      "activationEvents": [
+        "onStartupFinished",
+        "onWebviewPanel:claudeVSCodePanel"
+      ],
+      "main": "./extension.js",
+      "browser": "",
+      "contributes": {
+        "commands": [
+          {
+            "command": "claude-vscode.editor.open",
+            "title": "Claude Code: Open in New Tab"
+          },
+          {
+            "command": "claude-vscode.editor.openLast",
+            "title": "Claude Code: Open"
+          },
+          {
+            "command": "claude-vscode.primaryEditor.open",
+            "title": "Claude Code: Open in Primary Editor"
+          },
+          {
+            "command": "claude-vscode.window.open",
+            "title": "Claude Code: Open in New Window"
+          },
+          {
+            "command": "claude-vscode.createWorktree",
+            "title": "Claude Code: Create Worktree"
+          },
+          {
+            "command": "claude-vscode.sidebar.open",
+            "title": "Claude Code: Open in Side Bar"
+          },
+          {
+            "command": "claude-vscode.newConversation",
+            "title": "Claude Code: New Conversation"
+          },
+          {
+            "command": "claude-vscode.reopenClosedSession",
+            "title": "Claude Code: Reopen Closed Session"
+          },
+          {
+            "command": "claude-vscode.update",
+            "title": "Claude Code: Update extension"
+          },
+          {
+            "command": "claude-vscode.focus",
+            "title": "Claude Code: Focus input"
+          },
+          {
+            "command": "claude-vscode.blur",
+            "title": "Claude Code: Blur input"
+          },
+          {
+            "command": "claude-vscode.logout",
+            "title": "Claude Code: Logout"
+          },
+          {
+            "command": "claude-vscode.terminal.open",
+            "title": "Claude Code: Open in Terminal"
+          },
+          {
+            "command": "claude-vscode.acceptProposedDiff",
+            "title": "Claude Code: Accept Proposed Changes"
+          },
+          {
+            "command": "claude-vscode.rejectProposedDiff",
+            "title": "Claude Code: Reject Proposed Changes"
+          },
+          {
+            "command": "claude-vscode.insertAtMention",
+            "title": "Claude Code: Insert @-Mention Reference"
+          },
+          {
+            "command": "claude-vscode.installPlugin",
+            "title": "Claude Code: Install Plugin"
+          },
+          {
+            "command": "claude-code.acceptProposedDiff",
+            "title": "Claude Code: Accept Proposed Changes"
+          },
+          {
+            "command": "claude-code.rejectProposedDiff",
+            "title": "Claude Code: Reject Proposed Changes"
+          },
+          {
+            "command": "claude-code.insertAtMentioned",
+            "title": "Claude Code: Insert At-Mentioned"
+          }
+        ],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": [
+      {
+        "type": "commands",
+        "count": 20
+      }
+    ]
+  },
+  "Gruntfuggly.todo-tree": {
+    "id": "Gruntfuggly.todo-tree",
+    "name": "todo-tree",
+    "displayName": "Todo Tree",
+    "description": "Show TODO, FIXME, etc. comment tags in a tree view",
+    "version": "0.0.215",
+    "installedAt": "2026-05-26T19:48:36.734Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/Gruntfuggly/todo-tree/0.0.215/file/todo-tree.png",
+    "namespace": "Gruntfuggly",
+    "publisher": "Gruntfuggly",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "activated-shim",
+    "localPath": "server/state/extensions/Gruntfuggly.todo-tree/todo-tree-0.0.215.vsix",
+    "extractedPath": "server/state/extensions/Gruntfuggly.todo-tree/extracted",
+    "size": 576886,
+    "downloadUrl": "https://open-vsx.org/api/Gruntfuggly/todo-tree/0.0.215/file/Gruntfuggly.todo-tree-0.0.215.vsix",
+    "manifest": {
+      "name": "todo-tree",
+      "displayName": "Todo Tree",
+      "publisher": "Gruntfuggly",
+      "version": "0.0.215",
+      "description": "Show TODO, FIXME, etc. comment tags in a tree view",
+      "engines": {
+        "vscode": "^1.46.0"
+      },
+      "categories": [
+        "Other"
+      ],
+      "activationEvents": [
+        "onStartupFinished"
+      ],
+      "main": "./dist/extension",
+      "browser": "",
+      "contributes": {
+        "commands": [
+          {
+            "command": "todo-tree.showFlatView",
+            "title": "%todo-tree.command.showFlatView.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.showTagsOnlyView",
+            "title": "%todo-tree.command.showTagsOnlyView.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.showTreeView",
+            "title": "%todo-tree.command.showTreeView.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.refresh",
+            "title": "%todo-tree.command.refresh.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.expand",
+            "title": "%todo-tree.command.expand.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.collapse",
+            "title": "%todo-tree.command.collapse.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.filter",
+            "title": "%todo-tree.command.filter.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.filterClear",
+            "title": "%todo-tree.command.filterClear.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.groupByTag",
+            "title": "%todo-tree.command.groupByTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.ungroupByTag",
+            "title": "%todo-tree.command.ungroupByTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.groupBySubTag",
+            "title": "%todo-tree.command.groupBySubTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.ungroupBySubTag",
+            "title": "%todo-tree.command.ungroupBySubTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.scanOpenFilesOnly",
+            "title": "%todo-tree.command.scanOpenFilesOnly.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.scanCurrentFileOnly",
+            "title": "%todo-tree.command.scanCurrentFileOnly.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.scanWorkspaceAndOpenFiles",
+            "title": "%todo-tree.command.scanWorkspaceAndOpenFiles.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.scanWorkspaceOnly",
+            "title": "%todo-tree.command.scanWorkspaceOnly.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.addTag",
+            "title": "%todo-tree.command.addTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.removeTag",
+            "title": "%todo-tree.command.removeTag.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.exportTree",
+            "title": "%todo-tree.command.exportTree.title%",
+            "category": "%todo-tree.command.category%"
+          },
+          {
+            "command": "todo-tree.showOnlyThisFolder",
+            "title": "%todo-tree.command.showOnlyThisFolder.title%",
+            "category": "%todo-tree.command.category%"
+          }
+        ],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": [
+      {
+        "type": "commands",
+        "count": 20
+      }
+    ],
+    "runtimeStatus": {
+      "state": "active",
+      "commands": [],
+      "activatedAt": "2026-05-26T19:48:39.955Z"
+    }
+  },
+  "AnasYoussef.mishkah": {
+    "id": "AnasYoussef.mishkah",
+    "name": "mishkah",
+    "displayName": "Mishkah - مشكاة: أحاديث يومية للمبرمجين",
+    "description": "Show random Hadith for developers",
+    "version": "0.0.4",
+    "installedAt": "2026-05-26T21:57:26.193Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/AnasYoussef/mishkah/0.0.4/file/icon.png",
+    "namespace": "AnasYoussef",
+    "publisher": "AnasYoussef",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "activated-shim",
+    "localPath": "server/state/extensions/AnasYoussef.mishkah/mishkah-0.0.4.vsix",
+    "extractedPath": "server/state/extensions/AnasYoussef.mishkah/extracted",
+    "size": 3579095,
+    "downloadUrl": "https://open-vsx.org/api/AnasYoussef/mishkah/0.0.4/file/AnasYoussef.mishkah-0.0.4.vsix",
+    "manifest": {
+      "name": "mishkah",
+      "displayName": "Mishkah - مشكاة: أحاديث يومية للمبرمجين",
+      "publisher": "AnasYoussef",
+      "version": "0.0.4",
+      "description": "Show random Hadith for developers",
+      "engines": {
+        "vscode": "^1.96.0"
+      },
+      "categories": [
+        "Other"
+      ],
+      "activationEvents": [
+        "*"
+      ],
+      "main": "./out/extension.js",
+      "browser": "",
+      "contributes": {
+        "commands": [
+          {
+            "command": "mishkah.getHadith",
+            "title": "Mishkah: Show Hadith"
+          }
+        ],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": [
+      {
+        "type": "commands",
+        "count": 1
+      }
+    ],
+    "runtimeStatus": {
+      "state": "active",
+      "commands": [
+        "mishkah.getHadith"
+      ],
+      "activatedAt": "2026-05-26T21:57:27.856Z"
+    }
+  },
+  "ClarkZhang.llm-chat-history": {
+    "id": "ClarkZhang.llm-chat-history",
+    "name": "llm-chat-history",
+    "displayName": "LLM Chat History - Export, explore and share your AI chat history",
+    "description": "Export, explore and share your AI chat history",
+    "version": "0.5.10",
+    "installedAt": "2026-05-26T21:58:39.131Z",
+    "enabled": true,
+    "hook": "manual",
+    "icon": "https://open-vsx.org/api/ClarkZhang/llm-chat-history/0.5.10/file/icon.png",
+    "namespace": "ClarkZhang",
+    "publisher": "ClarkZhang",
+    "source": "vsx",
+    "installType": "vsix-download",
+    "activationStatus": "activation-failed",
+    "localPath": "server/state/extensions/ClarkZhang.llm-chat-history/llm-chat-history-0.5.10.vsix",
+    "extractedPath": "server/state/extensions/ClarkZhang.llm-chat-history/extracted",
+    "size": 17649956,
+    "downloadUrl": "https://open-vsx.org/api/ClarkZhang/llm-chat-history/0.5.10/file/ClarkZhang.llm-chat-history-0.5.10.vsix",
+    "manifest": {
+      "name": "llm-chat-history",
+      "displayName": "LLM Chat History - Export, explore and share your AI chat history",
+      "publisher": "ClarkZhang",
+      "version": "0.5.10",
+      "description": "Export, explore and share your AI chat history",
+      "engines": {
+        "vscode": "^1.93.0"
+      },
+      "categories": [
+        "Notebooks",
+        "Other"
+      ],
+      "activationEvents": [
+        "onStartupFinished"
+      ],
+      "main": "./dist/extension.js",
+      "browser": "",
+      "contributes": {
+        "commands": [
+          {
+            "command": "chatHistory.saveNow",
+            "title": "LLMChatHistory: Save Chat History Now"
+          },
+          {
+            "command": "chatHistory.search",
+            "title": "LLMChatHistory: Search Chat History"
+          },
+          {
+            "command": "chatHistory.cloudLogin",
+            "title": "LLMChatHistory: Login to Cloud"
+          },
+          {
+            "command": "chatHistory.cloudLogout",
+            "title": "LLMChatHistory: Logout from Cloud"
+          },
+          {
+            "command": "chatHistory.cloudSync",
+            "title": "LLMChatHistory: Sync to Cloud Now"
+          },
+          {
+            "command": "chatHistory.showCloudStatus",
+            "title": "LLMChatHistory: Show Cloud Sync Status"
+          },
+          {
+            "command": "chatHistory.refreshStatus",
+            "title": "Refresh"
+          },
+          {
+            "command": "chatHistory.openSettings",
+            "title": "Settings"
+          },
+          {
+            "command": "chatHistory.syncFiles",
+            "title": "LLMChatHistory: Sync Files to Cloud"
+          }
+        ],
+        "themes": [],
+        "languages": [],
+        "snippets": [],
+        "debuggers": []
+      }
+    },
+    "capabilities": [
+      {
+        "type": "commands",
+        "count": 9
+      }
+    ],
+    "runtimeStatus": {
+      "state": "failed",
+      "error": "Cannot read properties of undefined (reading 'Notification')",
+      "stack": "TypeError: Cannot read properties of undefined (reading 'Notification')\n    at SqliteLoader.ensureLoaded (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\dist\\sqlite-loader.js:1:35459)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Object.activate (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\dist\\extension.js:1:79197)\n    at async main (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\runtime\\extensionHost\\extensionHost.js:95:7)",
+      "commands": [],
+      "logs": [
+        {
+          "level": "host",
+          "message": "hostStarted",
+          "at": "2026-05-26T21:58:40.741Z"
+        },
+        {
+          "level": "out",
+          "message": "================================= {}\n",
+          "at": "2026-05-26T21:58:40.744Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:40.745Z"
+        },
+        {
+          "level": "out",
+          "message": "EXTENSION LOADING {}\nPATH {\n  entryPath: \u001b[32m'C:\\\\Users\\\\kozer\\\\Desktop\\\\octopus-ai\\\\server\\\\state\\\\extensions\\\\ClarkZhang.llm-chat-history\\\\extracted\\\\dist\\\\extension.js'\u001b[39m\n}\n",
+          "at": "2026-05-26T21:58:40.746Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:40.746Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:40.746Z"
+        },
+        {
+          "level": "out",
+          "message": "MODULE { keys: [ \u001b[32m'activate'\u001b[39m, \u001b[32m'deactivate'\u001b[39m ] }\n",
+          "at": "2026-05-26T21:58:42.403Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:42.403Z"
+        },
+        {
+          "level": "out",
+          "message": "ACTIVATE FOUND {}\n",
+          "at": "2026-05-26T21:58:42.404Z"
+        },
+        {
+          "level": "host",
+          "message": "debug",
+          "at": "2026-05-26T21:58:42.404Z"
+        },
+        {
+          "level": "out",
+          "message": "LLM Chat History Extension activated\n",
+          "at": "2026-05-26T21:58:42.414Z"
+        },
+        {
+          "level": "out",
+          "message": "[Telemetry] Generated new anonymous ID\n",
+          "at": "2026-05-26T21:58:42.418Z"
+        },
+        {
+          "level": "out",
+          "message": "[Telemetry] Initialized successfully\n",
+          "at": "2026-05-26T21:58:42.420Z"
+        },
+        {
+          "level": "out",
+          "message": "Binary exists but is not compatible: Error: \\\\?\\C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\node_modules\\better-sqlite3\\build\\Release\\better_sqlite3.node is not a valid Win32 application.\r\n\\\\?\\C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\node_modules\\better-sqlite3\\build\\Release\\better_sqlite3.node\n\u001b[90m    at Object..node (node:internal/modules/cjs/loader:1939:18)\u001b[39m\n\u001b[90m    at Module.load (node:internal/modules/cjs/loader:1505:32)\u001b[39m\n\u001b[90m    at Function.<anonymous> (node:internal/modules/cjs/loader:1309:12)\u001b[39m\n    at Function.patchedLoad [as _load] (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\runtime\\extensionHost\\extensionHost.js:8:23)\n\u001b[90m    at wrapModuleLoad (node:internal/modules/cjs/loader:254:19)\u001b[39m\n\u001b[90m    at Module.require (node:internal/modules/cjs/loader:1527:12)\u001b[39m\n\u001b[90m    at require (node:internal/modules/helpers:147:16)\u001b[39m\n    at bindings \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\\u001b[39mnode_modules\\\u001b[4mbindings\u001b[24m\\bindings.js:112:48\u001b[90m)\u001b[39m\n    at new Database \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\\u001b[39mnode_modules\\\u001b[4mbetter-sqlite3\u001b[24m\\lib\\database.js:48:64\u001b[90m)\u001b[39m\n    at SqliteLoader.testBinary \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\\u001b[39mdist\\sqlite-loader.js:1:42332\u001b[90m)\u001b[39m {\n  code: \u001b[32m'ERR_DLOPEN_FAILED'\u001b[39m\n}\n",
+          "at": "2026-05-26T21:58:42.449Z"
+        },
+        {
+          "level": "out",
+          "message": "⚠️  better-sqlite3 binary needs to be downloaded/updated\n",
+          "at": "2026-05-26T21:58:42.450Z"
+        },
+        {
+          "level": "err",
+          "message": "ACTIVATE FAILED\n",
+          "at": "2026-05-26T21:58:42.452Z"
+        },
+        {
+          "level": "err",
+          "message": "TypeError: Cannot read properties of undefined (reading 'Notification')\n    at SqliteLoader.ensureLoaded \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\\u001b[39mdist\\sqlite-loader.js:1:35459\u001b[90m)\u001b[39m\n\u001b[90m    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\u001b[39m\n    at async Object.activate \u001b[90m(C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\state\\extensions\\ClarkZhang.llm-chat-history\\extracted\\\u001b[39mdist\\extension.js:1:79197\u001b[90m)\u001b[39m\n    at async main (C:\\Users\\kozer\\Desktop\\octopus-ai\\server\\runtime\\extensionHost\\extensionHost.js:95:7)\n",
+          "at": "2026-05-26T21:58:42.453Z"
+        },
+        {
+          "level": "host",
+          "message": "activationFailed: Cannot read properties of undefined (reading 'Notification')",
+          "at": "2026-05-26T21:58:42.453Z"
+        }
+      ]
+    }
   }
 }
