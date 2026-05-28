@@ -44,6 +44,7 @@ const { appendTodoUpdate } = require('./services/todoLogService');
 const { createAuthMiddleware } = require('./services/authService');
 const { createRequestGuard } = require('./services/inputValidation');
 const { createSecurityKernel, CAPABILITIES, ROLES, PolicyRule } = require('./services/securityKernel');
+const { createErrorSelfHealService } = require('./services/errorSelfHealService');
 const { registerFileRoutes } = require('./routes/files');
 const { registerTerminalRoutes } = require('./routes/terminal');
 const { registerGitRoutes } = require('./routes/git');
@@ -61,6 +62,7 @@ const { registerScanRoutes } = require('./routes/scan');
 const { registerHudAiFixRoutes } = require('./routes/hudAiFix');
 const { registerHudApplyPatchRoutes } = require('./routes/hudApplyPatch');
 const { registerShimRoutes } = require('./routes/shim');
+const { registerDebugRoutes } = require('./routes/debug');
 const { initHudWS, hudLog, hudPluginUpdate } = require('./hud-ws');
 
 // Simple Plugin System - Module Exports Style
@@ -152,12 +154,25 @@ const securityKernel = createSecurityKernel({
     ...createScopedTokenResolvers(process.env),
     // 🔑 Legacy admin token (OCTOPUS_API_TOKEN)
     (req) => {
-      const token = req.get?.('X-Octopus-Token') || req.get?.('Authorization')?.replace(/^Bearer\s+/i, '') || '';
+      const token = String(req.get?.('X-Octopus-Token') || req.get?.('Authorization')?.replace(/^Bearer\s+/i, '') || '').trim();
       const configuredToken = String(env.get('OCTOPUS_API_TOKEN', '')).trim();
       if (configuredToken && token && token === configuredToken) {
         return { type: 'token', name: 'legacy-admin', role: 'admin', capabilities: ROLES.admin.capabilities };
       }
       return null;
+    },
+    // 🛠️ Local dev identity — يعطي developer role لطلبات localhost في وضع التطوير
+    // يُفعَّل فقط عندما لا يوجد token مُعرَّف في السيرفر
+    (req) => {
+      if (process.env.NODE_ENV === 'production') return null;
+      // لو مرّ من authMiddleware كـ local dev (لا يوجد token مُعرَّف)
+      if (!req._localDevAuth) return null;
+      return {
+        type: 'local',
+        name: 'local-developer',
+        role: 'developer',
+        capabilities: ROLES.developer.capabilities,
+      };
     },
   ],
 
@@ -263,10 +278,10 @@ app.use('/api', (req, res, next) => {
 });
 
 // 🔐 Route-Capability Guard — فحص صلاحيات مركزي تلقائي
-const { createCapabilityGuard } = require('./services/routeCapabilityMap');
+const { createCapabilityGuard, listRouteCapabilities, PUBLIC_ROUTE_PREFIXES } = require('./services/routeCapabilityMap');
 app.use('/api', createCapabilityGuard(securityKernel));
 
-// 🔒 Enforcement Layer — يمنع أي route يمر بدون فحص Security Kernel
+// 🔒 Enforcement Layer — يحجب أي route غير مسجل في كل البيئات (fail-closed)
 const ENFORCEMENT_SKIP_PATHS = new Set([
   '/api/health',
   '/api/rate-limits',
@@ -274,36 +289,39 @@ const ENFORCEMENT_SKIP_PATHS = new Set([
 ]);
 
 app.use('/api', (req, res, next) => {
-  if (ENFORCEMENT_SKIP_PATHS.has(req.path)) {
+  // req.path strips the mount prefix — reconstruct full path
+  const reqPath = (req.baseUrl || '') + req.path;
+
+  // مسارات ثابتة مستثناة (health, rate-limits)
+  if (ENFORCEMENT_SKIP_PATHS.has(reqPath)) {
     req._capabilityChecked = true;
     return next();
   }
 
-  // لو الـ route فُحص عبر Capability Guard أو فحص يدوي → سمح
+  // مسارات public (events) — مستثناة من فحص الـ capability
+  if (PUBLIC_ROUTE_PREFIXES.some(p => reqPath === p || reqPath.startsWith(p + '/'))) {
+    req._capabilityChecked = true;
+    return next();
+  }
+
+  // ✅ مسجّل عبر Capability Guard أو فحص يدوي داخل الـ route
   if (req._capabilityChecked) {
     return next();
   }
 
-  // 🔒 في وضع الإنتاج: نرفض أي route غير مسجل
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  if (nodeEnv === 'production') {
-    return res.status(403).json({
-      success: false,
-      error: `Route "${req.method} ${req.path}" is not registered with the security kernel`,
-      code: 'ROUTE_NOT_AUTHORIZED',
-    });
-  }
-
-  // تطوير: تحذير بدون منع
-  console.warn(`⚠️ [SecurityKernel] Unchecked route: ${req.method} ${req.path}`);
-  next();
+  // 🚫 HARD BLOCK — route غير مسجل في الخريطة: مرفوض في كل البيئات
+  console.error(`❌ [SecurityKernel] BLOCKED unregistered route: ${req.method} ${reqPath}`);
+  return res.status(403).json({
+    success: false,
+    error: `Route "${req.method} ${reqPath}" is not registered in the security capability map`,
+    code: 'ROUTE_NOT_REGISTERED',
+  });
 });
 
 // ═══════════════════════════════════════════════════════════
 // 🏛️ Governance Routes — واجهة الحوكمة
 // ═══════════════════════════════════════════════════════════
 const { SecurityDashboard: GovDashboard, registerGovernanceRoutes: registerGovRoutes } = require('./services/governanceLayer');
-const { listRouteCapabilities } = require('./services/routeCapabilityMap');
 
 const governanceDashboard = new GovDashboard({
   securityKernel,
@@ -332,6 +350,7 @@ const sessions = createSessionStore();
 const eventBus = createEventBus({
   eventLogPath: path.join(__dirname, 'state', 'runtime', 'events', 'events.ndjson'),
 });
+require('./services/providerHealthService').setEventBus(eventBus);
 const jobQueue = createJobQueue({
   concurrency: Number(env.get('OCTOPUS_JOB_CONCURRENCY', '2')) || 2,
   eventBus,
@@ -351,6 +370,14 @@ const taskRuntime = createTaskRuntime({
 });
 
 const callAI = createAIService({ env, groq, pluginManager, selectModel });
+
+// Initialize error self-heal service
+const errorSelfHealService = createErrorSelfHealService({
+  eventBus,
+  callAI,
+  systemPrompt: SYSTEM_PROMPT,
+});
+
 const simplePluginRuntime = createSimplePluginRuntime({
   app,
   pluginsDir,
@@ -431,11 +458,74 @@ registerScanRoutes(app);
 registerHudAiFixRoutes(app, { callAI });
 registerHudApplyPatchRoutes(app, { rootDir: path.join(__dirname, '..') });
 registerShimRoutes(app, { shimPolyfills });
+registerDebugRoutes(app, { sessions });
+
+async function validateOpenRouterOnStartup(envReader) {
+  const { updateHealth, recordSuccess, recordFailure } = require('./services/providerHealthService');
+  const apiKey = envReader.get('OPENROUTER_API_KEY', '');
+  const modelId = envReader.get('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3-0324');
+
+  updateHealth({ model: modelId });
+
+  if (!apiKey) {
+    console.warn('⚠️ [OpenRouter] No OPENROUTER_API_KEY — OpenRouter provider will be skipped');
+    updateHealth({ status: 'offline', available: false, lastError: 'no API key' });
+    hudLog('warn', 'OpenRouter: no API key configured');
+    return;
+  }
+
+  // Phase 1 — model availability check
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const ids = (data.data || []).map(m => m.id);
+      if (!ids.includes(modelId)) {
+        console.warn(`⚠️ [OpenRouter] Model "${modelId}" not found — check OPENROUTER_MODEL`);
+        hudLog('warn', `OpenRouter: model "${modelId}" not found in available list`);
+        updateHealth({ status: 'degraded', lastError: `model not found: ${modelId}` });
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn(`⚠️ [OpenRouter] Models check failed: ${err.message}`);
+  }
+
+  // Phase 2 — warmup completion (lightweight ping)
+  try {
+    const t0 = Date.now();
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: 'Say "pong" only.' }],
+        max_tokens: 5,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(typeof data.error === 'object' ? (data.error.message || JSON.stringify(data.error)) : data.error);
+    const latency = Date.now() - t0;
+    console.log(`✅ [OpenRouter] Warmup OK — model: ${modelId}, latency: ${latency}ms`);
+    hudLog('ok', `OpenRouter ready — model: ${modelId} (${latency}ms)`);
+    recordSuccess('OpenRouter', latency, modelId);
+  } catch (err) {
+    console.warn(`⚠️ [OpenRouter] Warmup failed: ${err.message}`);
+    hudLog('warn', `OpenRouter warmup failed: ${err.message}`);
+    recordFailure('OpenRouter', err);
+  }
+}
 
 const server = app.listen(PORT, () => {
   console.log(`🐙 أخطبوط شغّال على http://localhost:${PORT}`);
+  const registeredRoutes = listRouteCapabilities();
+  console.log(`🔐 [SecurityKernel] Capability map: ${registeredRoutes.length} routes registered (fail-closed enforcement active)`);
   initHudWS();
   hudLog('ok', `Server started on http://localhost:${PORT}`);
+  validateOpenRouterOnStartup(env);
   eventBus.publish('server.started', { port: Number(PORT) }, { category: 'system', source: 'server' });
   
   // تحميل الإضافات البسيطة (module.exports style)

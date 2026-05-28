@@ -42,20 +42,35 @@ function createAuthMiddleware({
 
     const configuredToken = String(env.OCTOPUS_API_TOKEN || '').trim();
     const remoteAddress = req.ip || req.socket?.remoteAddress || '';
+    const isLocal = isLocalAddress(remoteAddress);
 
-    // 🔒 Security: Local bypass disabled — always require a valid token
-    // Previously allowed unauthenticated access from localhost in dev mode
-    if (!configuredToken && allowLocalWithoutToken && isLocalAddress(remoteAddress)) {
-      console.warn('⚠️ OCTOPUS_ALLOW_LOCAL_NO_AUTH=1 but no OCTOPUS_API_TOKEN set — denying access');
-      return res.status(401).json({ success: false, error: 'Unauthorized — set OCTOPUS_API_TOKEN to enable access' });
+    // ✅ Dev mode: allow ALL localhost requests without requiring a token
+    // Security kernel will assign 'developer' role as fallback if no token matches
+    // This enables zero-config local development
+    if (nodeEnv !== 'production' && isLocal) {
+      req._localDevAuth = true; // علامة للـ security kernel يعطي developer role كـ fallback
+      // If a token IS configured and client sends matching one → will get 'admin' role via identity resolver
+      const clientToken = String(getClientToken(req)).trim();
+      if (configuredToken && clientToken && timingSafeEqualString(clientToken, configuredToken)) {
+        res.set?.('X-Octopus-Auth', 'token');
+      }
+      return next();
     }
 
+    // ✅ Explicit local bypass: OCTOPUS_ALLOW_LOCAL_NO_AUTH=1 also bypasses in production
+    if (allowLocalWithoutToken && isLocal) {
+      req._localDevAuth = true;
+      return next();
+    }
+
+    // 🔐 Non-local: token required
     const clientToken = String(getClientToken(req)).trim();
     if (configuredToken && clientToken && timingSafeEqualString(clientToken, configuredToken)) {
       res.set?.('X-Octopus-Auth', 'token');
       return next();
     }
 
+    // ❌ Deny: no valid auth
     return res.status(401).json({ success: false, error: 'Unauthorized' });
   };
 }

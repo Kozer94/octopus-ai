@@ -1,4 +1,5 @@
 const { buildDeterministicReplay } = require('../services/runtimeReconstructionService');
+const { getHealth, getHistory } = require('../services/providerHealthService');
 
 function serializeTask(task) {
   return task ? { ...task } : null;
@@ -135,6 +136,11 @@ function registerRuntimeRoutes(app, { eventBus, taskRuntime }) {
 
   app.get('/api/runtime/metrics', (_req, res) => {
     res.json({ success: true, metrics: taskRuntime.getMetrics() });
+  });
+
+  app.get('/api/runtime/ai-health', (req, res) => {
+    const limit = Math.min(Math.max(Number(req.query.historyLimit) || 20, 1), 100);
+    res.json({ success: true, health: getHealth(), history: getHistory(limit) });
   });
 }
 

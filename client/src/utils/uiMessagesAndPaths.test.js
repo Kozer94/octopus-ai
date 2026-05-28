@@ -28,6 +28,7 @@ import {
   terminalStreamingEntry,
   terminalSystemEntry,
 } from './terminalHistory.js';
+import { analyzeTerminalCommandRisk } from './terminalRisk.js';
 import { bidiIsolateStyle, bidiPlainTextStyle, codeTextStyle, getTextDirection } from './bidiText.js';
 
 test('chat message helpers keep role and text shape stable', () => {
@@ -69,8 +70,19 @@ test('terminal history helpers preserve entry types', () => {
   assert.deepEqual(terminalErrorEntry('bad'), { type: 'error', text: '⚠️ bad' });
   assert.deepEqual(terminalRunEntry('npm run dev'), { type: 'system', text: '🚀 Running: npm run dev' });
   assert.deepEqual(terminalApprovalEntry('npm test'), { type: 'system', text: 'Approval required: npm test' });
+  assert.deepEqual(terminalApprovalEntry('rm -rf .', analyzeTerminalCommandRisk('rm -rf .')), {
+    type: 'system',
+    text: 'Approval required: rm -rf . [High risk: Can delete data, reset state, stop services, or change the database. Confirm only if this exact action is intended.]',
+  });
   assert.deepEqual(terminalSkippedEntry('npm test'), { type: 'system', text: 'Skipped: npm test' });
   assert.deepEqual(terminalExitEntry(0), { type: 'system', text: 'Process exited with code 0' });
+});
+
+test('terminal risk classifier highlights destructive and package commands', () => {
+  assert.equal(analyzeTerminalCommandRisk('npm test').level, 'safe');
+  assert.equal(analyzeTerminalCommandRisk('npm install').level, 'caution');
+  assert.equal(analyzeTerminalCommandRisk('php artisan migrate').level, 'destructive');
+  assert.equal(analyzeTerminalCommandRisk('git reset --hard').level, 'destructive');
 });
 
 test('terminal stream helpers append chunks to the active output entry', () => {

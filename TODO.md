@@ -5,6 +5,47 @@
 <!-- OCTOPUS_AUTO_TODO_START -->
 ## سجل التحديثات التلقائي
 
+- [2026-05-28 02:40:00 +03] system:fix `client/src/hooks/useRuntimeInspector.js` و`client/src/components/auditor/RuntimeInspectorPanel.jsx` - جلب Worker Registry دائماً حتى دون tasks، وتوضيح أن عداد Control Plane يعرض active workers فقط.
+- [2026-05-28 02:25:00 +03] system:fix `client/src/cleanConsole.js` و`client/src/main.jsx` - عزل فلتر console في import مستقل قبل تحميل React/Vite لمنع التحذيرات الروتينية المبكرة.
+- [2026-05-28 02:00:00 +03] system:refactor `server/services/octopusConfig.js` - تحديث detectRequestLanguage بـ regex صارم لعزل الكردية (ەێۆڵڕگ) عن العربية بدون تداخل.
+- [2026-05-28 02:00:00 +03] system:refactor `server/services/octopusConfig.js` - إضافة [STRICT LANGUAGE LOCK] في بداية SYSTEM_PROMPT لفرض تطابق اللغة مع المستخدم.
+- [2026-05-28 02:00:00 +03] system:refactor `server/brainController.js` - حقن ديناميكي لـ buildLanguageHint(lang) في نهاية رسائل المستخدم في جميع استدعاءات AI (engineers, brain, legs, merge).
+- [2026-05-28 02:00:00 +03] system:refactor `server/services/aiService.js` - إضافة دعم streaming عبر onChunk callback في createHttpChatProvider و createGroqProvider و callAI.
+- [2026-05-28 02:00:00 +03] system:refactor `server/routes/octopus.js` - إضافة endpoint جديد /api/octopus/stream لـ SSE streaming مع heartbeat و error handling.
+- [2026-05-28 02:00:00 +03] system:refactor `client/src/utils/parseMessageParts.js` - إضافة StreamingParser class للتحليل التدريجي token-by-token مع دعم <file> و <terminal> tags.
+- [2026-05-28 02:00:00 +03] system:refactor `client/src/utils/octopusResponse.js` - إضافة دوال extractFileFromChunk, extractTerminalFromChunk, isFileComplete, isTerminalComplete للتحليل المباشر.
+- [2026-05-28 02:00:00 +03] system:refactor `client/src/utils/chatMessages.js` - تحديث INITIAL_CHAT_MESSAGES للتحية الديناميكية حسب لغة النظام (ar/ku/en).
+- [2026-05-28 02:00:00 +03] system:feature `server/services/errorSelfHealService.js` - إنشاء خدمة error self-healing تربط بين hud-ws و brainController لالتقاط أخطاء terminal وتشغيل AI auto-healing.
+- [2026-05-28 02:00:00 +03] system:security `server/truthLayer.js` - إضافة حماية لمنع قراءة ملفات .env و secrets في safeRead.
+- [2026-05-28 02:00:00 +03] system:refactor `server/index.js` - تفعيل errorSelfHealService مع eventBus و callAI و SYSTEM_PROMPT.
+- [2026-05-28 02:15:00 +03] system:feature `client/src/components/preview/LivePreview.jsx` - إنشاء مكون Live Preview مع iframe و URL extraction من terminal output.
+- [2026-05-28 02:15:00 +03] system:feature `client/src/components/preview/LivePreview.css` - إضافة تنسيقات CSS للمعاينة الحية مع split-screen layout و responsive design.
+- [2026-05-28 02:15:00 +03] system:refactor `client/src/components/chat/ChatPanel.jsx` - دمج LivePreview مع زر toggle للمعاينة الحية.
+- [2026-05-28 02:15:00 +03] system:refactor `client/src/components/chat/ChatMessages.jsx` - إضافة onTerminalOutput callback لتمرير terminal output للمعاينة.
+- [2026-05-28 02:15:00 +03] system:refactor `client/src/components/chat/ChatTerminalBlock.jsx` - إضافة onOutput prop لتمرير terminal output للـ Live Preview.
+## سجل التحديثات التلقائي
+
+- [2026-05-28 01:55:00 +03] system:prompt `server/services/octopusConfig.js` و`server/services/octopusConfig.test.js` - رفع قاعدة اللغة إلى Critical Instruction في بداية SYSTEM_PROMPT مع تثبيت Sorani/Arabic-script Kurdish ومنع الرد بالإنجليزية إلا إذا كتب المستخدم بالإنجليزية.
+- [2026-05-28 01:40:00 +03] system:feature `server/services/aiService.js` و`client/src/utils/terminalRisk.js` و`client/src/components/chat/TerminalChatTab.jsx` - إسكات lifecycle debug logs أثناء node test وإضافة تصنيف مخاطر لأوامر terminal قبل الموافقة مع إبقاء server policy كحاجز التنفيذ النهائي.
+- [2026-05-28 01:25:00 +03] system:lint `client/src/components/*` و`client/src/services/*` - تنظيف أخطاء ESLint في الواجهة بفصل ثوابت Fast Refresh وإزالة unused imports/props وإعادة صياغة ANSI regex بدون control literals.
+- [2026-05-28 01:12:00 +03] system:test `server/services/authService.test.js` و`server/services/httpSecurity.test.js` و`server/services/terminalService.test.js` - تحديث اختبارات auth/CORS/terminal لتعكس سياسات التطوير المحلي الجديدة ورفض empty origin ورسائل الأوامر غير المسموحة.
+- [2026-05-28 01:00:00 +03] system:test `server/services/ModelRegistry.test.js` - تحديث عقد اختبار ModelRegistry ليعامل registry ككتالوج أساسي للـ dynamic provider resolution بدل افتراض default static model ثابت.
+- [2026-05-28 00:45:00 +03] system:prompt `server/services/octopusConfig.js` و`server/services/octopusConfig.test.js` و`SYSTEM_PROMPT_REPORT.txt` - تحويل أهم توصيات التقرير إلى عقد تشغيل بإضافة Trust Boundaries للـ untrusted context وgating للعمليات destructive مع اختبارات تثبيت.
+- [2026-05-28 00:30:00 +03] system:docs `SYSTEM_PROMPT_REPORT.txt` - إنشاء تقرير TXT عربي يشرح هيكل عمل system prompt ونقاط القوة والضعف والنواقص وعلاقته بطبقات الأمن والتنفيذ.
+- [2026-05-28 00:02:00 +03] system:fix `server/services/aiService.js` و`server/services/ModelRegistry.js` و`client/src/services/ModelRegistry.js` - تغيير default model إلى `google/gemma-3-27b-it:free` عبر OpenRouter ورفع timeout الخاص بـ OpenRouter إلى 60000ms لتجنب فشل Deepseek R1 البطيء.
+- [2026-05-27 23:55:00 +03] system:fix `server/services/ModelRegistry.js` و`client/src/services/ModelRegistry.js` - تغيير default AI model إلى `deepseek/deepseek-r1` عبر OpenRouter لأن OpenRouter هو المزود المتاح حالياً.
+- [2026-05-27 23:45:00 +03] system:fix `server/services/ModelRegistry.js` و`client/src/services/ModelRegistry.js` - تغيير default AI model إلى `gemini-2.0-flash` في registry المشترك للواجهة والسيرفر لتجنب timeout الافتراضي على Groq.
+- [2026-05-27 23:30:00 +03] system:fix `client/src/config/monacoWorkers.js` و`client/src/main.jsx` و`main.js` - تفعيل Monaco workers عبر Vite worker imports داخل Electron، وربط Monaco قبل مكونات المحرر، مع تشديد sandbox وإبقاء CSP مفصولًا بين التطوير والإنتاج.
+- [2026-05-27 06:02:00 +03] system:feature `client/src/components/workspace/RequirementWizard.jsx` و`client/src/utils/specCompiler.js` و`client/src/components/editor/EditorWorkspace.jsx` - إضافة Octopus Workspace Launcher كـ Requirement Wizard يجمّع compiled spec من نوع المنتج والـ stack والموديولات وBuild Mode وSpec Preview، ثم يرسل spec إلى Octopus عبر تبويب Chat.
+- [2026-05-27 05:50:00 +03] system:ui `client/src/components/editor/EditorWorkspace.jsx` و`client/src/components/chat/ChatMessages.jsx` و`client/src/components/chat/TerminalChatTab.jsx` - نقل عرض رسائل الشات إلى وسط مساحة العمل عند وجود محادثة فعلية، مع إبقاء إدخال الشات في تبويب Chat داخل لوحة التيرمنال وتنسيق الرسائل بعرض مركزي وفق نمط ChatGPT.
+- [2026-05-27 05:42:00 +03] system:ui `client/src/components/terminal/TerminalPanel.jsx` و`client/src/components/chat/TerminalChatTab.jsx` و`client/src/components/layout/AppShell.jsx` - نقل الدردشة من FloatingChat إلى تبويب Chat داخل لوحة التيرمنال، مع تمرير حالة الشات والنموذج والموافقات عبر AppShell/MainArea وحذف اختصار Ctrl+K الخاص بالشات.
+- [2026-05-27 05:28:00 +03] system:refactor `client/src/components/*` و`client/src/config/octopusPromptContext.js` - إعادة تنظيم `client/src` إلى مجلدات feature-based للشات والتيرمنال والمستكشف والوركسبايس والمحرر والـ auditor والـ layout، مع تحديث relative imports بدون تغيير منطق الملفات.
+- [2026-05-27 05:18:00 +03] system:architecture `client/src/services/AIService.js` و`client/src/services/ModelRegistry.js` و`server/services/ModelRegistry.js` و`server/services/aiService.js` - فصل طبقة AI إلى registry/service مشتركة، تمرير selected model من الشات إلى preview/parallel/simple send، واختيار provider من ModelRegistry بدل hardcoded Groq.
+- [2026-05-27 05:08:00 +03] system:fix `client/src/utils/octopusPromptContext.js` و`client/src/hooks/useOctopusWorkflow.js` و`client/src/utils/miscUtils.test.js` - تحويل طلبات إنشاء Laravel/React/Next/Flutter الواضحة إلى أوامر terminal deterministic قبل AI، مع فتح موافقة التيرمنال ورد بنفس لغة المستخدم.
+- [2026-05-27 05:03:00 +03] system:prompt `server/services/octopusConfig.js` و`server/services/octopusConfig.test.js` - تبسيط SYSTEM_PROMPT لقواعد صارمة: الرد بنفس لغة المستخدم فقط، أوامر إنشاء Flutter/Laravel/React/Next داخل `<terminal>`, عدم التعريف المتكرر، مع إبقاء بروتوكول `<file path>`.
+- [2026-05-27 04:58:00 +03] system:feature `client/src/utils/octopusPromptContext.js` و`client/src/hooks/useOctopusWorkflow.js` و`client/src/utils/miscUtils.test.js` - إضافة أمر تثبيت لغة الشات (`/lang ar` أو `ثبت اللغة العربية`) مع حفظه في localStorage وتغليف طلبات AI بتعليمات لغة صارمة حتى لا يبدل Octopus اللغة أثناء المحادثة.
+- [2026-05-27 04:52:00 +03] system:fix `client/src/utils/octopusPromptContext.js` و`client/src/utils/miscUtils.test.js` - إضافة رد محلي عربي لسؤال "مواصفاتك/قدراتك" وفصل قالب المواصفات عن قالب "كيف تساعدني" لمنع تسرب الأسئلة العامة إلى AI بلغة خاطئة.
+- [2026-05-27 04:48:00 +03] system:fix `client/src/utils/octopusPromptContext.js` و`client/src/utils/diffUtils.js` و`client/src/utils/miscUtils.test.js` - تثبيت ردود محلية مستقرة للتحية وسؤال "كيف تساعدني؟" بالعربية والكردية والإنجليزية، مع كشف Sorani مكتوب بحروف عربية وتنظيف بادئة `assistant:` من ردود الشات.
 - [2026-05-27 04:44:00 +03] system:fix `server/services/authService.js` - إضافة /api/events و /api/events/stream و /api/events/batch و /events و /events/stream و /events/batch إلى DEFAULT_PUBLIC_API_PATHS لتجاوز auth middleware وحل مشكلة 401 على telemetry endpoints (auth middleware يرى المسار بدون /api prefix).
 - [2026-05-27 04:42:00 +03] system:fix `client/src/services/correlationLayer.js` - تحديث _flush() لقراءة token من localStorage مباشرة بدلاً من _authToken، مما يحل مشكلة 401 على /api/events/batch.
 - [2026-05-27 04:38:00 +03] system:fix `client/src/services/securityBootstrap.js` و`client/src/services/apiClient.js` و`client/src/services/runtimeTelemetry.js` - إضافة getDynamicToken() لقراءة token من localStorage في كل مرة بدلاً من تخزينه في authContext، مما يحل مشكلة 401 عند إضافة token يدوياً بعد تحميل الصفحة.
@@ -195,6 +236,7 @@
 - [2026-05-25 20:00:00 UTC] system:feature `server/services/severityEngine.js` و`server/services/scanReportService.js` - إضافة Severity Engine بأبعاد exploitability/user impact/reproducibility/production risk/confidence
 - [2026-05-25 20:15:00 UTC] system:fix `client/src/components/EditorWorkspace.jsx` و`client/src/hooks/useResizableLayout.js` - معالجة أولويات إعادة الفحص: تبويبات قابلة للتمرير، banner فشل ثابت، وحماية عرض المحرر
 - [2026-05-25 20:45:00 UTC] system:fix `client/src/components/TerminalPanel.jsx` و`client/src/config/uiConfig.js` - إغلاق الثغرات المتبقية: session/backend config، مفاتيح القوائم، modal escape، reduced motion، ومسارات ellipsis
+- [2026-05-27 02:02:22 UTC] ai:write `مسار الملف` - generated 9 chars
 <!-- OCTOPUS_AUTO_TODO_END -->
 
 ### 1. الأمان

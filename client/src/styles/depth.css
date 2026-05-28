@@ -26,10 +26,10 @@
   --depth-glow-success: 0 0 20px rgba(46,160,67,0.2);
   --depth-glow-error: 0 0 20px rgba(218,54,51,0.2);
 
-  --glass-blur: 12px;
-  --glass-blur-heavy: 24px;
-  --glass-saturate: 1.4;
-  --glass-border-opacity: 0.12;
+  --glass-blur: 16px;
+  --glass-blur-heavy: 28px;
+  --glass-saturate: 1.55;
+  --glass-border-opacity: 0.10;
 
   --atmospheric-ambient: radial-gradient(ellipse at 50% 0%, rgba(88,166,255,0.03) 0%, transparent 60%);
   --atmospheric-core-glow: radial-gradient(circle at 50% 50%, rgba(88,166,255,0.06) 0%, transparent 50%);

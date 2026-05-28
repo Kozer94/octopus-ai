@@ -6,10 +6,10 @@ const {
   isAllowedCorsOrigin,
 } = require('./httpSecurity');
 
-test('isAllowedCorsOrigin allows local app origins and server-to-server requests', () => {
+test('isAllowedCorsOrigin allows configured local app origins and rejects empty origins', () => {
   const allowed = getAllowedOrigins('');
 
-  assert.equal(isAllowedCorsOrigin(undefined, allowed), true);
+  assert.equal(isAllowedCorsOrigin(undefined, allowed), false);
   assert.equal(isAllowedCorsOrigin('http://localhost:5173', allowed), true);
   assert.equal(isAllowedCorsOrigin('http://127.0.0.1:5173', allowed), true);
 });

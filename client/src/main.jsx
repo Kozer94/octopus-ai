@@ -1,16 +1,22 @@
+import './cleanConsole.js'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import monaco from './config/monacoWorkers.js'
 import { loader } from '@monaco-editor/react'
-import * as monaco from 'monaco-editor'
 import './index.css'
 import './styles/depth.css'
 import App from './App.jsx'
-import { ErrorBoundary } from './components/ErrorBoundary'
+import { ErrorBoundary } from './components/layout/ErrorBoundary'
 import { createSessionId } from './config/uiConfig.js'
 import { initCorrelation } from './services/correlationLayer.js'
 import { installRuntimeTelemetry } from './services/runtimeTelemetry.js'
 import { registerMonacoThemes } from './utils/monacoThemes.js'
 import { bootstrapSecurityContext } from './services/securityBootstrap.js'
+
+// إيقاف إشعارات أدوات المطورين الافتراضية لـ React قبل تحميل الواجهة
+if (globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+  globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__.supportsFiber = true;
+}
 
 // ═══════════════════════════════════════════════════════════
 // 🔐 Security Bootstrap Phase

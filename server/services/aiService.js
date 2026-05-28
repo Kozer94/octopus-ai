@@ -1,16 +1,20 @@
 const { createEnvReader } = require('./envService');
 const { delay, withTimeout } = require('./asyncControl');
 const { hudLog, hudProviderUpdate } = require('../hud-ws');
+const { getModelById } = require('./ModelRegistry');
+const { recordSuccess, recordFailure, isInCooldown, getRemainingCooldownMs } = require('./providerHealthService');
+const structuredLogger = require('./logger');
+const { ContextError, ProviderError } = require('./errors');
+const { MODEL_TIMEOUT_TIERS } = require('../modelSelector');
 
 const DEFAULT_PROVIDER_NAMES = [
-  'Ollama',
-  'Groq llama-3.3-70b',
+  'OpenRouter',
   'Groq llama-3.1-8b',
   'Groq llama-3.2-3b',
   'Mistral',
   'Cohere',
   'Together',
-  'OpenRouter',
+  'Ollama',
   'Gemini',
 ];
 
@@ -21,7 +25,29 @@ function readChatChoice(data, providerName) {
 }
 
 function createGroqProvider(groq, { model, maxTokenCap }) {
-  return async (messages, maxTokens) => {
+  return async (messages, maxTokens, onChunk) => {
+    // If streaming is requested and supported
+    if (onChunk) {
+      const stream = await groq.chat.completions.create({
+        model,
+        messages,
+        temperature: 0.5,
+        max_tokens: Math.min(maxTokens, maxTokenCap),
+        stream: true,
+      });
+      
+      let fullContent = '';
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        if (content) {
+          fullContent += content;
+          onChunk(content, fullContent);
+        }
+      }
+      return fullContent;
+    }
+    
+    // Non-streaming fallback
     const completion = await groq.chat.completions.create({
       model,
       messages,
@@ -40,8 +66,55 @@ function createHttpChatProvider(env, {
   name,
   readContent = readChatChoice,
 }) {
-  return async (messages, maxTokens) => {
+  return async (messages, maxTokens, onChunk) => {
     if (!env.has(apiKeyName)) throw new Error('no key');
+    
+    // If streaming is requested and supported
+    if (onChunk) {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${env.get(apiKeyName)}`, 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ ...body(messages, maxTokens), stream: true }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(typeof errorData.error === 'object' ? (errorData.error.message || JSON.stringify(errorData.error)) : errorData.error || `HTTP ${res.status}`);
+      }
+      
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content || '';
+              if (content) {
+                fullContent += content;
+                onChunk(content, fullContent);
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+      
+      return fullContent;
+    }
+    
+    // Non-streaming fallback
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${env.get(apiKeyName)}`, 'Content-Type': 'application/json', ...headers },
@@ -55,23 +128,19 @@ function createHttpChatProvider(env, {
 
 function createDefaultProviders({ env = createEnvReader(), groq }) {
   return [
-    // Ollama - محلي مجاني بدون tokens (يشتغل فقط لو Ollama مثبّت)
-    async (messages, maxTokens) => {
-      const model = env.get('OLLAMA_MODEL', 'llama3.2');
-      const baseUrl = env.get('OLLAMA_BASE_URL', 'http://localhost:11434');
-      const res = await fetch(`${baseUrl}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, messages, stream: false, options: { num_predict: Math.min(maxTokens, 4096) } }),
-      });
-      if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`);
-      const data = await res.json();
-      const content = data.message?.content;
-      if (!content) throw new Error('Ollama empty response');
-      return content;
-    },
+    // OpenRouter - primary provider (stable, paid)
+    createHttpChatProvider(env, {
+      apiKeyName: 'OPENROUTER_API_KEY',
+      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
+      name: 'OpenRouter',
+      body: (messages, maxTokens) => ({
+        model: env.get('OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3-0324'),
+        messages,
+        max_tokens: maxTokens,
+      }),
+    }),
     // Groq fallbacks
-    createGroqProvider(groq, { model: 'llama-3.3-70b-versatile', maxTokenCap: 4096 }),
+    createGroqProvider(groq, { model: 'llama-3.1-8b-instant', maxTokenCap: 4096 }),
     createGroqProvider(groq, { model: 'llama-3.1-8b-instant', maxTokenCap: 2048 }),
     createGroqProvider(groq, { model: 'llama-3.2-3b-preview', maxTokenCap: 2048 }),
     createHttpChatProvider(env, {
@@ -97,12 +166,21 @@ function createDefaultProviders({ env = createEnvReader(), groq }) {
       name: 'Together',
       body: (messages, maxTokens) => ({ model: 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo', messages, max_tokens: maxTokens }),
     }),
-    createHttpChatProvider(env, {
-      apiKeyName: 'OPENROUTER_API_KEY',
-      endpoint: 'https://openrouter.ai/api/v1/chat/completions',
-      name: 'OpenRouter',
-      body: (messages, maxTokens) => ({ model: 'google/gemma-3-27b-it:free', messages, max_tokens: maxTokens }),
-    }),
+    // Ollama - local fallback (only works if installed)
+    async (messages, maxTokens) => {
+      const model = env.get('OLLAMA_MODEL', 'llama3.2');
+      const baseUrl = env.get('OLLAMA_BASE_URL', 'http://localhost:11434');
+      const res = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: false, options: { num_predict: Math.min(maxTokens, 4096) } }),
+      });
+      if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`);
+      const data = await res.json();
+      const content = data.message?.content;
+      if (!content) throw new Error('Ollama empty response');
+      return content;
+    },
     // Gemini
     async (messages, _maxTokens) => {
       if (!env.has('GEMINI_API_KEY')) throw new Error('no key');
@@ -224,11 +302,77 @@ function auditContext(messages, { originalMessages = null, tokenLimit = GROQ_TOK
     verdict,
   };
 
-  console.log('CONTEXT_AUDIT:', JSON.stringify(report));
+  debugLifecycleLog('CONTEXT_AUDIT:', report);
   return report;
 }
 
+// بناء provider ديناميكي بناءً على model ID المختار من الـ UI
+function buildProviderForModel(groq, env, modelId) {
+  const model = getModelById(modelId);
+  if (!model) return null;
+
+  if (model.provider === 'groq') {
+    return createGroqProvider(groq, { model: model.id, maxTokenCap: model.maxTokenCap || 4096 });
+  }
+
+  if (model.provider === 'mistral') {
+    return createHttpChatProvider(env, {
+      apiKeyName: model.apiKeyName,
+      endpoint: model.endpoint,
+      name: model.label,
+      body: (msgs, maxT) => ({ model: model.id, messages: msgs, max_tokens: maxT }),
+    });
+  }
+
+  if (model.provider === 'openrouter') {
+    return createHttpChatProvider(env, {
+      apiKeyName: model.apiKeyName,
+      endpoint: model.endpoint,
+      name: model.label,
+      body: (msgs, maxT) => ({ model: model.id, messages: msgs, max_tokens: maxT }),
+    });
+  }
+
+  if (model.provider === 'gemini') {
+    return async (messages) => {
+      if (!env.has(model.apiKeyName)) throw new Error('no key');
+      const { GoogleGenerativeAI } = require('@google/generative-ai');
+      const genAI = new GoogleGenerativeAI(env.get(model.apiKeyName));
+      const gemModel = genAI.getGenerativeModel({ model: model.id });
+      const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+      const result = await gemModel.generateContent(prompt);
+      return result.response.text();
+    };
+  }
+
+  if (model.provider === 'ollama') {
+    return async (messages, maxTokens) => {
+      const ollamaModel = env.get(model.envModelName, model.id.replace(/^ollama:/, ''));
+      const baseUrl = env.get(model.envBaseUrl, 'http://localhost:11434');
+      const res = await fetch(`${baseUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: ollamaModel, messages, stream: false, options: { num_predict: Math.min(maxTokens, 4096) } }),
+      });
+      if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text().catch(() => '')}`);
+      const data = await res.json();
+      const content = data.message?.content;
+      if (!content) throw new Error('Ollama empty response');
+      return content;
+    };
+  }
+
+  return null;
+}
+
 const DEFAULT_PROVIDER_TIMEOUT_MS = 15000;
+const OPENROUTER_PROVIDER_TIMEOUT_MS = 60000;
+
+function getProviderTimeoutMs(providerName, selectedModel, fallbackTimeoutMs) {
+  return selectedModel?.provider === 'openrouter' || providerName === 'OpenRouter'
+    ? OPENROUTER_PROVIDER_TIMEOUT_MS
+    : fallbackTimeoutMs;
+}
 
 function isPayloadTooLarge(error, message) {
   return error.status === 413 || message.includes('413') ||
@@ -243,8 +387,19 @@ function isRateLimited(error, message) {
     message.includes('quota') || message.includes('Quota');
 }
 
-function logProviderLifecycle(debugLog, payload) {
-  console.log('DEBUG_REQUEST_LIFECYCLE:', JSON.stringify({ ...debugLog, ...payload }));
+function isTestRuntime() {
+  return Boolean(process.env.NODE_TEST_CONTEXT || process.env.NODE_ENV === 'test');
+}
+
+const aiLog = structuredLogger.withContext('aiService');
+
+function debugLifecycleLog(label, payload) {
+  if (isTestRuntime()) return;
+  aiLog.debug(label, payload);
+}
+
+function logProviderLifecycle(debugPayload, payload) {
+  debugLifecycleLog('REQUEST_LIFECYCLE', { ...debugPayload, ...payload });
 }
 
 async function handleProviderError({
@@ -318,13 +473,17 @@ function createAIService({
   pluginManager,
   selectModel,
   providers = createDefaultProviders({ env, groq }),
-  logger = console,
+  logger = structuredLogger.asConsoleAdapter(),
   providerTimeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS,
   maxProviderAttempts = 3,
 }) {
-  return async function callAI(messages, maxTokens = 8192, command = '') {
+  return async function callAI(messages, maxTokens = 8192, command = '', modelOverride = '', onChunk = null) {
     const modelSelection = selectModel(command);
-    logger.log(`🧠 Model Selection: ${modelSelection.reasoning}`);
+    const selectedModelId = modelOverride || modelSelection.modelName || '';
+    const selectedModel = getModelById(selectedModelId);
+    const ctxTokens = estimateTokens(messages);
+    logger.log(`🧠 [ModelSelector] ${modelSelection.reasoning}${modelOverride ? ` | override: ${modelOverride}` : ''}`);
+    logger.log(`📦 [ContextSize] ~${ctxTokens} tokens | messages: ${messages.length}`);
 
     const pluginProviders = pluginManager.getAllAIProviders();
     logger.log(`🔌 Plugin AI Providers: ${pluginProviders.length}`);
@@ -337,12 +496,14 @@ function createAIService({
     let trimApplied    = false;
 
     if (preAudit.verdict === 'INVALID_TRIM') {
-      console.log('EXECUTION_GATE:', JSON.stringify({
+      debugLifecycleLog('EXECUTION_GATE:', {
         event:  'EXECUTION_ABORTED',
         reason: 'INVALID_TRIM_PRE_FLIGHT',
         tokens: preAudit.summary.total_tokens,
-      }));
-      throw new Error('Execution aborted: context corruption detected before trim');
+      });
+      throw new ContextError('Context corruption detected before trim', {
+        verdict: preAudit.verdict, tokens: preAudit.summary.total_tokens,
+      });
     }
 
     if (preAudit.verdict === 'OVER_LIMIT') {
@@ -352,26 +513,29 @@ function createAIService({
 
       const postAudit = auditContext(activeMessages, { originalMessages: messages });
       if (postAudit.verdict === 'INVALID_TRIM') {
-        console.log('EXECUTION_GATE:', JSON.stringify({
+        debugLifecycleLog('EXECUTION_GATE:', {
           event:       'EXECUTION_ABORTED',
           reason:      'POST_TRIM_INVALID',
           pre_tokens:  preAudit.summary.total_tokens,
           post_tokens: postAudit.summary.total_tokens,
-        }));
-        throw new Error('Execution aborted: context invalid after trim');
+        });
+        throw new ContextError('Context invalid after trim', {
+          pre_tokens: preAudit.summary.total_tokens,
+          post_tokens: postAudit.summary.total_tokens,
+        });
       }
-      console.log('EXECUTION_GATE:', JSON.stringify({
+      debugLifecycleLog('EXECUTION_GATE:', {
         event:            'TRIM_APPLIED',
         pre_tokens:       preAudit.summary.total_tokens,
         post_tokens:      postAudit.summary.total_tokens,
         messages_dropped: preAudit.summary.count - postAudit.summary.count,
         verdict:          postAudit.verdict,
-      }));
+      });
     } else {
-      console.log('EXECUTION_GATE:', JSON.stringify({
+      debugLifecycleLog('EXECUTION_GATE:', {
         event:  'SAFE_TO_EXECUTE',
         tokens: preAudit.summary.total_tokens,
-      }));
+      });
     }
 
     // ── PHASE 3: Provider loop ────────────────────────────────────
@@ -379,16 +543,26 @@ function createAIService({
       call: provider.call,
       name: provider.name || provider.id || `Plugin provider ${index}`,
     }));
+    const selectedProvider = buildProviderForModel(groq, env, selectedModelId);
+    const selectedProviderDescriptors = selectedProvider
+      ? [{
+          call: selectedProvider,
+          name: selectedModel?.label || selectedModelId,
+          timeoutMs: MODEL_TIMEOUT_TIERS[selectedModelId] || getProviderTimeoutMs(selectedModel?.label || selectedModelId, selectedModel, providerTimeoutMs),
+        }]
+      : [];
     const defaultProviderDescriptors = providers.map((provider, index) => ({
       call: provider,
       name: DEFAULT_PROVIDER_NAMES[index] || `provider[${index}]`,
+      timeoutMs: getProviderTimeoutMs(DEFAULT_PROVIDER_NAMES[index], null, providerTimeoutMs),
     }));
-    const allProviders = [...pluginProviderDescriptors, ...defaultProviderDescriptors].slice(0, Math.max(1, maxProviderAttempts));
+    const allProviders = [...selectedProviderDescriptors, ...pluginProviderDescriptors, ...defaultProviderDescriptors]
+      .slice(0, Math.max(1, maxProviderAttempts));
     const errors       = [];
     let   retryRound   = 0;
 
     for (let i = 0; i < allProviders.length; i++) {
-      const { call: provider, name: providerName } = allProviders[i];
+      const { call: provider, name: providerName, timeoutMs } = allProviders[i];
       const payloadJson = JSON.stringify(activeMessages);
       const debugLog    = {
         step:                  'before_provider_call',
@@ -401,19 +575,29 @@ function createAIService({
         final_estimated_tokens: Math.ceil(payloadJson.length / CHARS_PER_TOKEN),
         decision:              'send',
       };
-      console.log('DEBUG_REQUEST_LIFECYCLE:', JSON.stringify(debugLog));
+      debugLifecycleLog('DEBUG_REQUEST_LIFECYCLE:', debugLog);
+
+      // Circuit Breaker — تجاوز OpenRouter لو في cooldown
+      if (providerName === 'OpenRouter' && isInCooldown()) {
+        const remMs = getRemainingCooldownMs();
+        errors.push(`provider[${i}]: circuit open (cooldown ${Math.ceil(remMs / 1000)}s remaining)`);
+        hudLog('warn', `OpenRouter circuit breaker active — retry in ${Math.ceil(remMs / 1000)}s`);
+        hudProviderUpdate(providerName, 'cooldown', { cooldownMs: remMs });
+        continue;
+      }
 
       try {
         const startedAt = Date.now();
         const result = await withTimeout(
-          () => provider(activeMessages, Math.min(maxTokens, TOKEN_BUDGET)),
-          providerTimeoutMs,
+          () => provider(activeMessages, Math.min(maxTokens, TOKEN_BUDGET), onChunk),
+          timeoutMs || providerTimeoutMs,
           `provider[${i}]`,
         );
         if (result) {
           const latency = Date.now() - startedAt;
           hudLog('ok', `AI response via ${providerName} - ${latency}ms`);
           hudProviderUpdate(providerName, 'active', { latency });
+          recordSuccess(providerName, latency, selectedModelId || null);
           return result;
         }
       } catch (error) {
@@ -435,13 +619,18 @@ function createAIService({
     }
 
     const summary = errors.join(' | ');
-    logger.error(`❌ All providers failed: ${summary}`);
-    throw new Error(`All AI providers failed: ${summary}`);
+    logger.error(`All providers failed — task: ${command?.slice(0, 60) || '(none)'} | errors: ${summary}`);
+    recordFailure('all', new Error(summary));
+    throw new ProviderError(`All AI providers failed: ${summary}`, {
+      providerName: 'all',
+      context: { errors, command: command?.slice(0, 80) },
+    });
   };
 }
 
 module.exports = {
   DEFAULT_PROVIDER_TIMEOUT_MS,
+  OPENROUTER_PROVIDER_TIMEOUT_MS,
   TOKEN_BUDGET,
   createAIService,
   createDefaultProviders,

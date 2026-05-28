@@ -23,15 +23,17 @@ export function useRuntimeInspector({ rightPanelTab }) {
   }, []);
 
   const refreshRuntimeInspector = useCallback(async () => {
-    const [tasksData, metricsData, controlPlaneData] = await Promise.all([
+    const [tasksData, metricsData, controlPlaneData, workersData] = await Promise.all([
       runtimeApi.tasks(),
       runtimeApi.metrics(),
       runtimeApi.controlPlane(),
+      runtimeApi.workers(),
     ]);
     const tasks = tasksData.tasks || [];
     setRuntimeTasks(tasks);
     setRuntimeMetrics(metricsData.metrics || null);
     setRuntimeControlPlane(controlPlaneData.controlPlane || null);
+    setRuntimeWorkers(workersData.workers || []);
     setSelectedRuntimeTask(current => {
       if (!current) return tasks[0] || null;
       return tasks.find(task => task.id === current.id) || tasks[0] || null;
@@ -39,18 +41,15 @@ export function useRuntimeInspector({ rightPanelTab }) {
 
     const workflowId = tasks[0]?.workflowId;
     if (workflowId) {
-      const [graphData, treeData, workersData] = await Promise.all([
+      const [graphData, treeData] = await Promise.all([
         runtimeApi.graph(workflowId),
         runtimeApi.tree(workflowId),
-        runtimeApi.workers(),
       ]);
       setRuntimeGraph(graphData.graph || null);
       setRuntimeTree(treeData.tree || null);
-      setRuntimeWorkers(workersData.workers || []);
     } else {
       setRuntimeGraph(null);
       setRuntimeTree(null);
-      setRuntimeWorkers([]);
     }
   }, []);
 

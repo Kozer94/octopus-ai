@@ -55,6 +55,7 @@ function registerPtyTerminalServer(server) {
           rows,
           cwd,
           env: buildSafeEnv(),
+          useConpty: false,
         });
 
         ptyProcess.onData(data => send({ type: 'data', data }));

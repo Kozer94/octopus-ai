@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import '@vscode/codicons/dist/codicon.css';
-import { AppShell } from './components/AppShell';
+import { AppShell } from './components/layout/AppShell';
 import { BACKEND, createSessionId, THEMES } from './config/uiConfig';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import { useAppShortcuts } from './hooks/useAppShortcuts';
@@ -20,7 +20,9 @@ import { useCommandPalette } from './hooks/useCommandPalette';
 import { useWorkspaceSearch } from './hooks/useWorkspaceSearch';
 import './styles/animations.css';
 import './styles/depth.css';
+import './styles/glassmorphism.css';
 import { filesApi, shimApi } from './services/apiClient';
+import { getDefaultModelId } from './services/ModelRegistry';
 import { INITIAL_CHAT_MESSAGES, octopusMessage } from './utils/chatMessages';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useLayoutAuditor } from './auditor/useLayoutAuditor';
@@ -46,6 +48,7 @@ export default function App() {
   const { activateLeg, completeLeg, legs, resetLegs, setLegs } = useLegProgress();
   const [messages, setMessages] = useState(INITIAL_CHAT_MESSAGES);
   const [input, setInput] = useState("");
+  const [selectedModel, setSelectedModel] = useState(getDefaultModelId);
   const [loading, setLoading] = useState(false);
   const [theme, setTheme] = useState(() => {
     const stored = globalThis.localStorage?.getItem('octopus-theme');
@@ -116,8 +119,8 @@ export default function App() {
     setMessages(prev => [...prev, octopusMessage(text, {
       extensionRuntimeFailure: { extensionId, errorSignal: error },
     })]);
-    setRightPanelOpen(true);
-    setRightPanelTab('chat');
+    setTerminalOpen(true);
+    setTerminalTab('chat');
   }
 
   async function repairExtensionShim({ extensionId, errorSignal }) {
@@ -274,11 +277,11 @@ export default function App() {
 
   const onCommandPaletteAction = (item) => {
     if (!item) return;
-    if (item.id === 'ai.ask') { setRightPanelOpen(true); setRightPanelTab('chat'); }
-    else if (item.id === 'ai.explain') { setRightPanelOpen(true); setRightPanelTab('chat'); }
-    else if (item.id === 'ai.refactor') { setRightPanelOpen(true); setRightPanelTab('chat'); }
-    else if (item.id === 'ai.fix') { setRightPanelOpen(true); setRightPanelTab('chat'); }
-    else if (item.id === 'ai.generate') { setRightPanelOpen(true); setRightPanelTab('chat'); }
+    if (item.id === 'ai.ask') { setTerminalOpen(true); setTerminalTab('chat'); }
+    else if (item.id === 'ai.explain') { setTerminalOpen(true); setTerminalTab('chat'); }
+    else if (item.id === 'ai.refactor') { setTerminalOpen(true); setTerminalTab('chat'); }
+    else if (item.id === 'ai.fix') { setTerminalOpen(true); setTerminalTab('chat'); }
+    else if (item.id === 'ai.generate') { setTerminalOpen(true); setTerminalTab('chat'); }
     else if (item.id === 'file.open') { openFolder(); }
     else if (item.id === 'file.save') { saveCurrentFile(); }
     else if (item.id === 'file.saveAll') { saveAllOpenFiles(); }
@@ -322,6 +325,14 @@ export default function App() {
   useAutoScroll(terminalBottomRef, terminalHistory);
 
   useAppShortcuts({ searchInputRef, setSidebarOpen, setTerminalOpen });
+
+  // فتح تبويب Chat تلقائياً عند وصول أمر terminal يحتاج موافقة
+  useEffect(() => {
+    if (pendingTerminalCommands[0]) {
+      setTerminalOpen(true);
+      setTerminalTab('chat');
+    }
+  }, [pendingTerminalCommands, setTerminalOpen, setTerminalTab]);
 
   const { approveTerminalCommand, queueTerminalCommand, rejectTerminalCommand } = useTerminalApprovals({
     pendingTerminalCommands,
@@ -378,6 +389,14 @@ export default function App() {
   });
 
   const { handleScan } = useProjectScan({ currentDir, refreshFileTree, setMessages });
+
+  // تێرمینال زیرەک — هەڵە دۆزیەوە → AI خۆکار چارەسەری پێشنیار دەکات
+  function handleTerminalError(errorText) {
+    setMessages(prev => [...prev, octopusMessage('🔍 Terminal error detected — asking AI for help...')]);
+    setTerminalOpen(true);
+    setTerminalTab('chat');
+    send(`[Mode: Fix]\nTerminal error detected:\n\`\`\`\n${errorText}\n\`\`\`\nPlease analyze this error and suggest a fix.`);
+  }
 
   const activateRightPanel = (tab) => {
     setRightPanelTab(tab);
@@ -484,6 +503,7 @@ export default function App() {
       menuOpen={menuOpen}
       messages={messages}
       onRepairExtensionShim={repairExtensionShim}
+      onTerminalError={handleTerminalError}
       monacoRef={monacoRef}
       onFileClick={onFileClick}
       openFolder={openFolder}
@@ -515,6 +535,7 @@ export default function App() {
       searchResults={searchResults}
       searching={searching}
       selectedExtension={selectedExtension}
+      selectedModel={selectedModel}
       selectedRuntimeTask={selectedRuntimeTask}
       send={send}
       setActiveActivity={setActiveActivity}
@@ -529,6 +550,7 @@ export default function App() {
       setRightPanelTab={setRightPanelTab}
       setSearchQuery={setSearchQuery}
       setSelectedExtension={setSelectedExtension}
+      setSelectedModel={setSelectedModel}
       setSelectedRuntimeTask={setSelectedRuntimeTask}
       setSidebarOpen={setSidebarOpen}
       setTerminalInput={setTerminalInput}

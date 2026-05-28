@@ -1,0 +1,195 @@
+
+/* ═══════════════════════════════════════════════════════════════
+   OCTOPUS AI — Glassmorphism Design System
+   floating orbs · frosted glass panels · atmospheric depth
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orb Float Animations ─────────────────────────────────────── */
+@keyframes orbFloat1 {
+  0%,  100% { transform: translate(  0px,   0px) scale(1.00); }
+  33%       { transform: translate( 55px, -40px) scale(1.09); }
+  66%       { transform: translate(-35px,  48px) scale(0.92); }
+}
+
+@keyframes orbFloat2 {
+  0%,  100% { transform: translate(  0px,   0px) scale(1.00); }
+  40%       { transform: translate(-65px,  35px) scale(1.13); }
+  70%       { transform: translate( 45px, -50px) scale(0.87); }
+}
+
+@keyframes orbFloat3 {
+  0%,  100% { transform: translate(  0px,   0px) scale(1.00); }
+  50%       { transform: translate( 40px,  65px) scale(1.07); }
+}
+
+@keyframes orbFloat4 {
+  0%,  100% { transform: translate(  0px,   0px) scale(1.00) rotate(  0deg); }
+  25%       { transform: translate( 28px, -28px) scale(1.05) rotate(  6deg); }
+  75%       { transform: translate(-30px,  32px) scale(0.95) rotate( -5deg); }
+}
+
+/* ── Background Orb Container ─────────────────────────────────── */
+.glass-bg-layer {
+  position:       absolute;
+  inset:          0;
+  z-index:        -1;        /* behind all content in root stacking context */
+  pointer-events: none;
+  overflow:       hidden;
+  background:
+    radial-gradient(ellipse at 20%  15%, rgba(111,  66, 193, 0.32) 0%, transparent 55%),
+    radial-gradient(ellipse at 82%   8%, rgba( 56, 139, 253, 0.26) 0%, transparent 52%),
+    radial-gradient(ellipse at 50%  92%, rgba(162,  84, 246, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse at 78%  62%, rgba(  0, 200, 255, 0.14) 0%, transparent 45%),
+    radial-gradient(ellipse at 10%  75%, rgba(220,  60, 180, 0.14) 0%, transparent 45%),
+    linear-gradient(148deg, #0e0621 0%, #07081a 38%, #050c1c 68%, #0c0220 100%);
+}
+
+/* ── Individual Orbs ─────────────────────────────────────────── */
+.glass-orb {
+  position:     absolute;
+  border-radius: 50%;
+  filter:       blur(95px);
+  will-change:  transform;
+  mix-blend-mode: screen;
+}
+
+.glass-orb-1 {
+  width: 740px; height: 740px;
+  top: -18%; left: -10%;
+  background: radial-gradient(circle at 42% 42%,
+    rgba(135,  60, 230, 0.52) 0%,
+    rgba( 90,  40, 175, 0.28) 42%,
+    transparent 70%);
+  animation: orbFloat1 22s ease-in-out infinite;
+}
+
+.glass-orb-2 {
+  width: 600px; height: 600px;
+  bottom: -14%; right: 2%;
+  background: radial-gradient(circle at 58% 58%,
+    rgba( 48, 118, 255, 0.46) 0%,
+    rgba( 28,  78, 205, 0.22) 42%,
+    transparent 70%);
+  animation: orbFloat2 28s ease-in-out infinite;
+}
+
+.glass-orb-3 {
+  width: 490px; height: 490px;
+  top: 32%; right: 12%;
+  background: radial-gradient(circle at 50% 40%,
+    rgba(  0, 205, 255, 0.27) 0%,
+    rgba(  0, 155, 225, 0.13) 46%,
+    transparent 70%);
+  animation: orbFloat3 19s ease-in-out infinite;
+}
+
+.glass-orb-4 {
+  width: 390px; height: 390px;
+  top: 55%; left: 25%;
+  background: radial-gradient(circle at 50% 50%,
+    rgba(225,  75, 255, 0.22) 0%,
+    rgba(165,  48, 215, 0.11) 50%,
+    transparent 70%);
+  animation: orbFloat4 34s ease-in-out infinite;
+}
+
+/* ── Root Stacking Context ────────────────────────────────────── */
+.theme-glass {
+  isolation: isolate;   /* creates a stacking context */
+}
+
+/* ── Scrollbar Refinement ─────────────────────────────────────── */
+.theme-glass ::-webkit-scrollbar        { width: 3px; height: 3px; }
+.theme-glass ::-webkit-scrollbar-track  { background: transparent; }
+.theme-glass ::-webkit-scrollbar-thumb  {
+  background:    rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+}
+.theme-glass ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ── Override Glass Utility Classes ──────────────────────────── */
+.theme-glass .glass-subtle {
+  background:            rgba(255, 255, 255, 0.038) !important;
+  backdrop-filter:       blur(24px) saturate(1.75) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.75) brightness(1.04) !important;
+  border-color:          rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    0  8px 32px rgba(0, 0, 0, 0.32),
+    inset 0  1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.15) !important;
+}
+
+.theme-glass .glass {
+  background:            rgba(255, 255, 255, 0.055) !important;
+  backdrop-filter:       blur(20px) saturate(1.65) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.65) !important;
+  border-color:          rgba(255, 255, 255, 0.12) !important;
+}
+
+.theme-glass .glass-heavy {
+  background:            rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter:       blur(30px) saturate(1.85) !important;
+  -webkit-backdrop-filter: blur(30px) saturate(1.85) !important;
+  border-color:          rgba(255, 255, 255, 0.15) !important;
+}
+
+.theme-glass .glass-accent {
+  background:            rgba(167, 139, 250, 0.10) !important;
+  backdrop-filter:       blur(16px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.5) !important;
+  border-color:          rgba(167, 139, 250, 0.20) !important;
+}
+
+/* ── Focus Ring Enhancement ───────────────────────────────────── */
+.theme-glass .activity-btn:hover {
+  background: rgba(167, 139, 250, 0.10) !important;
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.14) !important;
+}
+
+.theme-glass .activity-btn.active {
+  background: rgba(167, 139, 250, 0.14) !important;
+  border-color: rgba(167, 139, 250, 0.30) !important;
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.20), inset 0 0 10px rgba(167, 139, 250, 0.10) !important;
+}
+
+/* ── Resize Handle Glow ───────────────────────────────────────── */
+.theme-glass .resize-handle:hover {
+  background: rgba(167, 139, 250, 0.35) !important;
+}
+
+/* ── Editor Tab Enhancement ───────────────────────────────────── */
+.theme-glass .editor-tab.active::after {
+  background: #a78bfa !important;
+}
+
+/* ── Focus Ring Card Enhancement ─────────────────────────────── */
+.theme-glass .focus-ring-card:hover {
+  border-color:  rgba(167, 139, 250, 0.25) !important;
+  background:    rgba(167, 139, 250, 0.05) !important;
+}
+
+/* ── Command Palette Glass ────────────────────────────────────── */
+.theme-glass .command-palette-container {
+  backdrop-filter:         blur(28px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.8) !important;
+  background:  rgba(20, 10, 50, 0.75) !important;
+  border-color: rgba(167, 139, 250, 0.22) !important;
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0  0  60px rgba(100, 60, 200, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Reduced Motion ───────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .glass-orb,
+  .glass-orb-1,
+  .glass-orb-2,
+  .glass-orb-3,
+  .glass-orb-4 {
+    animation:   none !important;
+    will-change: auto !important;
+  }
+}

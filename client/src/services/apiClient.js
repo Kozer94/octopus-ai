@@ -1,5 +1,4 @@
 import { BACKEND } from '../config/uiConfig.js';
-import { getDynamicToken } from './securityBootstrap.js';
 
 async function parseJsonResponse(response) {
   const data = await response.json();
@@ -145,6 +144,9 @@ export const filesApi = {
   read: ({ filePath, projectDir }) => postJson('/api/files/read', { filePath, projectDir }),
   showInExplorer: filePath => postJson('/api/files/show-in-explorer', { filePath }),
   write: ({ filePath, content, projectDir }) => postJson('/api/files/write', { filePath, content, projectDir }),
+  delete: ({ filePath, projectDir }) => postJson('/api/files/delete', { filePath, projectDir }),
+  rename: ({ oldPath, newPath, projectDir }) => postJson('/api/files/rename', { oldPath, newPath, projectDir }),
+  mkdir: ({ dirPath, projectDir }) => postJson('/api/files/mkdir', { dirPath, projectDir }),
 };
 
 export const gitApi = {
@@ -222,7 +224,7 @@ async function resolveQueuedOctopusResponse(response, options = {}) {
 export const octopusApi = {
   send: payload => postJson('/api/octopus', payload, { signal: timedAbortSignal(30_000) })
     .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 120_000 })),
-  preview: ({ command, projectDir }) => postJson('/api/octopus/preview', { command, projectDir }, { signal: timedAbortSignal(30_000) })
+  preview: ({ command, projectDir, model = '' }) => postJson('/api/octopus/preview', { command, projectDir, model }, { signal: timedAbortSignal(30_000) })
     .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 95_000 })),
   parallel: payload => postJson('/api/octopus/parallel', payload, { signal: timedAbortSignal(30_000) })
     .then(data => resolveQueuedOctopusResponse(data, { timeoutMs: 310_000 })),

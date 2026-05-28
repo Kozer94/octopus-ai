@@ -67,6 +67,7 @@ export function removeUnknownScriptCharacters(text) {
 
 export function cleanChatText(text) {
   return removeUnknownScriptCharacters(text || '')
+    .replace(/^\s*(assistant|octopus)\s*:\s*/i, '')
     .replace(/<file path="[^"]+">[\s\S]*?<\/file>/g, '')
     .replace(/<edit path="[^"]+">[\s\S]*?<\/edit>/g, '')
     .replace(/<terminal>[\s\S]*?<\/terminal>/g, '')

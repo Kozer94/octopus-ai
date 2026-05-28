@@ -1,6 +1,6 @@
 import { THEMES } from '../config/uiConfig';
 import { filesApi } from '../services/apiClient';
-import { OCTOPUS_ABOUT_MESSAGE } from '../utils/chatMessages';
+import { OCTOPUS_ABOUT_MESSAGE, octopusMessage } from '../utils/chatMessages';
 
 export function useTitleMenuItems({
   activeFile,
@@ -44,10 +44,7 @@ export function useTitleMenuItems({
   toggleRun,
 }) {
   const showStatusSummary = () => {
-    setMessages(prev => [...prev, {
-      role: 'octopus',
-      text: `Status: ${files.length} open file(s), ${gitFiles.length} git item(s), ${installedExtensions.length} extension(s).`,
-    }]);
+    setMessages(prev => [...prev, octopusMessage(`Status: ${files.length} open file(s), ${gitFiles.length} git item(s), ${installedExtensions.length} extension(s).`)]);
   };
 
   return [

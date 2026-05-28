@@ -1,4 +1,5 @@
 import { terminalApprovalEntry, terminalSkippedEntry } from '../utils/terminalHistory';
+import { analyzeTerminalCommandRisk } from '../utils/terminalRisk';
 
 export function useTerminalApprovals({
   pendingTerminalCommands,
@@ -14,8 +15,8 @@ export function useTerminalApprovals({
 
     setPendingTerminalCommands(prev => [...prev, command]);
     setTerminalOpen(true);
-    setTerminalTab('terminal');
-    setTerminalHistory(prev => [...prev, terminalApprovalEntry(command)]);
+    setTerminalTab('chat');
+    setTerminalHistory(prev => [...prev, terminalApprovalEntry(command, analyzeTerminalCommandRisk(command))]);
   }
 
   async function approveTerminalCommand(command) {

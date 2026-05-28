@@ -1,3 +1,4 @@
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 const { app, BrowserWindow, ipcMain, dialog, Menu, MenuItem } = require('electron');
 const path = require('path');
 const dotenv = require('dotenv');
@@ -19,6 +20,7 @@ function createWindow() {
     frame: false,
     webPreferences: {
       contextIsolation: true,
+      sandbox: true,
       nodeIntegration: false,
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -32,14 +34,14 @@ function createWindow() {
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "font-src 'self' data: https://fonts.gstatic.com; " +
         "connect-src 'self' ws://localhost:* http://localhost:* ws://127.0.0.1:* http://127.0.0.1:*; " +
-        "img-src 'self' data: https:; " +
+        "img-src 'self' data: blob: https:; " +
         "worker-src 'self' blob:"
       : "default-src 'self'; " +
         "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
         "font-src 'self' data: https://fonts.gstatic.com; " +
         "connect-src 'self'; " +
-        "img-src 'self' data: https:; " +
+        "img-src 'self' data: blob: https:; " +
         "worker-src 'self' blob:";
 
     callback({

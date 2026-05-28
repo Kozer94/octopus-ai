@@ -386,6 +386,13 @@ async function renameProjectFileAsync({ projectDir, clientProjectName = '', oldP
   return { projectRoot, oldPath: oldTarget.fullPath, newPath: newTarget.fullPath };
 }
 
+async function mkdirProjectAsync({ projectDir, clientProjectName = '', dirPath }) {
+  const projectRoot = getOperationRoot(projectDir, dirPath, clientProjectName);
+  const target = resolveInsideRoot(projectRoot, dirPath);
+  await fsp.mkdir(target.fullPath, { recursive: true });
+  return { projectRoot, fullPath: target.fullPath, relativePath: target.relativePath };
+}
+
 module.exports = {
   deleteProjectFile,
   deleteProjectFileAsync,
@@ -404,4 +411,5 @@ module.exports = {
   resolveInsideRoot,
   writeProjectFile,
   writeProjectFileAsync,
+  mkdirProjectAsync,
 };

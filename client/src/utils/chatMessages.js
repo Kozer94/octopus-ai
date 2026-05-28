@@ -1,5 +1,22 @@
+// Detect system language for localized greeting
+function getSystemLanguage() {
+  const browserLang = navigator.language || navigator.userLanguage || 'en';
+  if (browserLang.startsWith('ar')) return 'ar';
+  if (browserLang.startsWith('ku')) return 'ku';
+  return 'en';
+}
+
 export const INITIAL_CHAT_MESSAGES = [
-  { id: 'initial-octopus-ready', role: 'octopus', text: "Hello 🐙 I'm ready. Tell me what you want to build." },
+  { 
+    id: 'initial-octopus-ready', 
+    role: 'octopus', 
+    text: (() => {
+      const lang = getSystemLanguage();
+      if (lang === 'ar') return 'مرحباً 🐙 أنا جاهز. أخبرني ماذا تريد أن تبني.';
+      if (lang === 'ku') return 'سڵاو 🐙 ئامان. بڵیمن بکە دەتەوێت چی دروست بکەیت.';
+      return "Hello 🐙 I'm ready. Tell me what you want to build.";
+    })()
+  },
 ];
 
 function createMessageId(role) {

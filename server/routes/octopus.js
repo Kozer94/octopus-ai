@@ -1,6 +1,11 @@
 const path = require('path');
 const { withTimeout } = require('../services/asyncControl');
 const { CAPABILITIES } = require('../services/securityKernel');
+const { buildFullCommand, buildTaggedCommand, budgetSessionMessages, estimateTokens } = require('../services/contextBuilderService');
+const { createSpan } = require('../services/telemetryService');
+const logger = require('../services/logger').withContext('octopus');
+
+const DEBUG = process.env.DEBUG_AI === 'true';
 
 function registerOctopusRoutes(app, {
   aiLimiter,
@@ -97,10 +102,14 @@ function registerOctopusRoutes(app, {
       if (!req.body || typeof req.body !== 'object') {
         return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
       }
-      const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '' } = req.body;
+      const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '', model = '' } = req.body;
       const sessionId = (typeof rawSessionId === 'string' ? rawSessionId : 'default').slice(0, 128).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'default';
       const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: '' };
       if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
+
+      if (!command || typeof command !== 'string' || !command.trim()) {
+        return res.status(400).json({ success: false, error: 'command must be a non-empty string' });
+      }
 
       if (isReportCommand(command)) {
         return res.status(400).json({
@@ -111,46 +120,169 @@ function registerOctopusRoutes(app, {
       }
 
       const job = jobQueue.enqueue('octopus.chat', async () => {
+        const span = createSpan({ label: 'octopus.chat', sessionId });
         if (!sessions[sessionId]) sessions[sessionId] = [];
+
+        // ── Context Build ──────────────────────────────────────────
+        span.mark('contextBuild');
         const projectMapContext = binding.projectRoot
           ? getProjectContextForTask(binding.projectRoot, command, activeFile, activeFileContent)
           : '';
 
-        let fullCommand = projectMapContext
-          ? `خريطة المشروع والسياق الذكي:\n${projectMapContext}\n\n--- USER REQUEST START ---
-${command.slice(0, 2000)}
---- USER REQUEST END ---`
-          : projectContext
-          ? `ملفات المشروع المفتوحة:\n${projectContext}\n\nالملف الحالي: ${activeFile}\n\n--- USER REQUEST START ---
-${command.slice(0, 2000)}
---- USER REQUEST END ---`
-          : activeFileContent
-            ? `الملف الحالي (${activeFile}):\n\`\`\`\n${activeFileContent.slice(0, 2000)}\n\`\`\`\n\n--- USER REQUEST START ---
-${command.slice(0, 2000)}
---- USER REQUEST END ---`
-            : command;
-
+        let fullCommand = buildFullCommand({ command, projectMapContext, projectContext, activeFile, activeFileContent });
         fullCommand = await executeHook('beforeSend', fullCommand);
         if (typeof fullCommand !== 'string') fullCommand = String(fullCommand);
-        fullCommand = fullCommand.slice(0, 8000);
 
-        sessions[sessionId].push({ role: 'user', content: fullCommand });
-        if (sessions[sessionId].length > 8) sessions[sessionId] = sessions[sessionId].slice(-8);
+        const { taggedCommand, lang, hint } = buildTaggedCommand(command, fullCommand);
+        const contextTokens = estimateTokens(taggedCommand);
+        span.end('contextBuild', { tokens: contextTokens });
 
-        let response = await callAI([
+        // ── Smart Session: token-budgeted + deduplicated history ───
+        const budgetedHistory = budgetSessionMessages(sessions[sessionId] || [], {
+          systemPrompt,
+          userCommand: taggedCommand,
+        });
+
+        const messagesForAI = [
           { role: 'system', content: systemPrompt },
-          ...sessions[sessionId],
-        ], 100000, command);
+          ...budgetedHistory,
+          { role: 'user', content: taggedCommand },
+        ];
+        if (DEBUG) logger.debug('[AI DEBUG]', { lang, hint, messagesCount: messagesForAI.length, budgetedHistory: budgetedHistory.length, contextTokens });
 
+        // ── AI Call ─────────────────────────────────────────────────
+        span.mark('aiCall');
+        let response = await callAI(messagesForAI, 8192, command, model);
+        span.end('aiCall', { model: model || 'auto' });
+
+        // ── Post-processing ─────────────────────────────────────────
+        span.mark('postProcess');
         response = await executeHook('afterResponse', response);
         const savedFiles = await saveTaggedFiles(response, binding.projectRoot || projectDir);
-        sessions[sessionId].push({ role: 'assistant', content: response });
-        return { success: true, result: response, sessionId, savedFiles };
+        span.end('postProcess');
+
+        // ── Session Update (FIX: assignment triggering Proxy set) ───
+        sessions[sessionId] = [
+          ...(sessions[sessionId] || []),
+          { role: 'user', content: command },
+          { role: 'assistant', content: response },
+        ].slice(-16);
+        sessions.setMeta(sessionId, { lastModel: model || 'auto', _increment: true });
+
+        span.complete({ model: model || 'auto', savedFiles: savedFiles?.length });
+        return { success: true, result: response, sessionId, savedFiles, requestId: span.requestId };
       }, { sessionId });
 
       return sendQueued(res, job);
     } catch (error) {
       res.status(error.statusCode || 500).json({ success: false, error: require('../services/inputValidation').safeErrorMessage(error) });
+    }
+  });
+
+  // Streaming endpoint for real-time token-by-token response
+  app.post('/api/octopus/stream', aiLimiter, async (req, res) => {
+    let streamStarted = false;
+    let heartbeatId = null;
+
+    const sendEvent = (event, data) => {
+      if (!res.writableEnded) {
+        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
+    };
+
+    try {
+      if (!req.body || typeof req.body !== 'object') {
+        return res.status(400).json({ success: false, error: 'Request body is missing or invalid. Please ensure you are sending JSON data.' });
+      }
+      const { command, sessionId: rawSessionId = 'default', activeFile = '', activeFileContent = '', projectDir = '', projectContext = '', clientProjectName = '', model = '' } = req.body;
+      const sessionId = (typeof rawSessionId === 'string' ? rawSessionId : 'default').slice(0, 128).replace(/[^a-zA-Z0-9_\-]/g, '_') || 'default';
+      const binding = projectDir ? validateProjectBinding(projectDir, clientProjectName) : { ok: true, projectRoot: '' };
+      if (!binding.ok) return res.status(400).json({ success: false, error: binding.error });
+
+      if (!command || typeof command !== 'string' || !command.trim()) {
+        return res.status(400).json({ success: false, error: 'command must be a non-empty string' });
+      }
+
+      if (isReportCommand(command)) {
+        return res.status(400).json({
+          success: false,
+          error: 'طلبات التقرير يجب أن تمر عبر /api/octopus/preview حتى يتم إنشاء report.md فقط بعد التأكيد.',
+          requiresPreview: true,
+        });
+      }
+
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+      streamStarted = true;
+
+      // Heartbeat every 15 seconds to prevent inactivity timeout
+      heartbeatId = setInterval(() => {
+        if (!res.writableEnded) res.write(': heartbeat\n\n');
+      }, 15_000);
+
+      if (!sessions[sessionId]) sessions[sessionId] = [];
+      const span = createSpan({ label: 'octopus.stream', sessionId });
+
+      // ── Context Build ──────────────────────────────────────────
+      span.mark('contextBuild');
+      const projectMapContext = binding.projectRoot
+        ? getProjectContextForTask(binding.projectRoot, command, activeFile, activeFileContent)
+        : '';
+
+      let fullCommand = buildFullCommand({ command, projectMapContext, projectContext, activeFile, activeFileContent });
+      fullCommand = await executeHook('beforeSend', fullCommand);
+      if (typeof fullCommand !== 'string') fullCommand = String(fullCommand);
+
+      const { taggedCommand } = buildTaggedCommand(command, fullCommand);
+      span.end('contextBuild', { tokens: estimateTokens(taggedCommand) });
+
+      // ── Smart Session: token-budgeted + deduplicated history ───
+      const budgetedHistory = budgetSessionMessages(sessions[sessionId] || [], {
+        systemPrompt,
+        userCommand: taggedCommand,
+      });
+
+      const messagesForAI = [
+        { role: 'system', content: systemPrompt },
+        ...budgetedHistory,
+        { role: 'user', content: taggedCommand },
+      ];
+
+      let fullResponse = '';
+
+      // ── AI Call (streaming) ────────────────────────────────────
+      span.mark('aiCall');
+      await callAI(messagesForAI, 8192, command, model, (chunk, accumulated) => {
+        sendEvent('chunk', { chunk, accumulated });
+        fullResponse = accumulated;
+      });
+      span.end('aiCall', { model: model || 'auto' });
+
+      const processedResponse = await executeHook('afterResponse', fullResponse);
+      const savedFiles = await saveTaggedFiles(processedResponse, binding.projectRoot || projectDir);
+
+      // ── Session Update (FIX: assignment triggering Proxy set) ───
+      sessions[sessionId] = [
+        ...(sessions[sessionId] || []),
+        { role: 'user', content: command },
+        { role: 'assistant', content: processedResponse },
+      ].slice(-16);
+      sessions.setMeta(sessionId, { lastModel: model || 'auto', _increment: true });
+
+      span.complete({ model: model || 'auto', savedFiles: savedFiles?.length });
+
+      if (heartbeatId) clearInterval(heartbeatId);
+      sendEvent('complete', { success: true, result: processedResponse, sessionId, savedFiles, requestId: span.requestId });
+      res.end();
+    } catch (error) {
+      if (heartbeatId) clearInterval(heartbeatId);
+      if (!streamStarted) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+      sendEvent('error', { success: false, error: error.message, message: error.message });
+      res.end();
     }
   });
 
@@ -175,13 +307,14 @@ ${command.slice(0, 2000)}
         command,
         projectDir = '',
         activeFile = '',
-        activeFileContent = ''
+        activeFileContent = '',
+        model = '',
       } = req.body;
       if (!command) return res.status(400).json({ success: false, error: 'command is required' });
 
       const job = jobQueue.enqueue('octopus.preview', async () => {
         const preview = await withRouteTimeout(
-          previewBrainController({ command, projectDir, activeFile, activeFileContent, callAI }),
+          previewBrainController({ command, projectDir, activeFile, activeFileContent, callAI, modelOverride: model }),
           PREVIEW_TIMEOUT_MS,
           'Preview',
         );
@@ -217,6 +350,8 @@ ${command.slice(0, 2000)}
         activeFileContent = '',
         confirmed = false,
         sessionId = 'default',
+        model = '',
+        plan: clientPlan = null,
       } = req.body;
 
       if (!confirmed) {
@@ -229,12 +364,12 @@ ${command.slice(0, 2000)}
 
       const onUpdate = (entry) => {
         const label = entry.legId === 0 ? '🧠 Brain' : `🦾 Leg ${entry.legId}`;
-        console.log(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
+        logger.debug(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
       };
 
       const job = jobQueue.enqueue('octopus.parallel', async () => {
         const result = await withRouteTimeout(
-          runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate }),
+          runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate, modelOverride: model, plan: clientPlan }),
           PARALLEL_TIMEOUT_MS,
           'Parallel execution',
         );
@@ -269,6 +404,8 @@ ${command.slice(0, 2000)}
         activeFileContent = '',
         projectDir = '',
         confirmed = false,
+        model = '',
+        plan: clientPlan = null,
       } = req.body;
 
       if (!confirmed) {
@@ -293,11 +430,11 @@ ${command.slice(0, 2000)}
       const onUpdate = (entry) => {
         sendEvent('leg_update', entry);
         const label = entry.legId === 0 ? '🧠 Brain' : `🦾 Leg ${entry.legId}`;
-        console.log(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
+        logger.debug(`${label}: ${entry.status}${entry.task ? ' — ' + entry.task : ''}`);
       };
 
       const result = await withRouteTimeout(
-        runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate }),
+        runBrainController({ command, projectDir, activeFile, activeFileContent, callAI, onUpdate, modelOverride: model, plan: clientPlan }),
         PARALLEL_TIMEOUT_MS,
         'Parallel execution',
       );

@@ -52,8 +52,9 @@ export function terminalRunEntry(command) {
   return terminalSystemEntry(`🚀 Running: ${command}`);
 }
 
-export function terminalApprovalEntry(command) {
-  return terminalSystemEntry(`Approval required: ${command}`);
+export function terminalApprovalEntry(command, risk = null) {
+  const suffix = risk?.level && risk.level !== 'safe' ? ` [${risk.label}: ${risk.message}]` : '';
+  return terminalSystemEntry(`Approval required: ${command}${suffix}`);
 }
 
 export function terminalSkippedEntry(command) {

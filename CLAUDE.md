@@ -43,9 +43,9 @@ octopus-ai/
 ## AI Providers — الترتيب والحالة
 
 ```
-provider[0] = Groq       → llama-3.1-8b-instant  ✅ Active (primary)
-provider[1] = OpenAI     → gpt-4o-mini            ❌ No API key
-provider[2] = Ollama     → llama3 (local)         ❌ Offline
+provider[0] = OpenRouter → deepseek/deepseek-chat-v3-0324  ✅ Active (primary)
+provider[1] = Groq       → llama-3.1-8b-instant            ⚡ Fallback
+provider[2] = Ollama     → llama3 (local)                  ❌ Offline (last resort)
 ```
 
 **قاعدة ثابتة:** لا تعدّل منطق الـ fallback بين providers أبداً إلا إذا طُلب صراحةً.

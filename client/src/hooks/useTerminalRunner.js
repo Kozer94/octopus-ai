@@ -13,6 +13,55 @@ import {
   terminalSystemEntry,
 } from '../utils/terminalHistory';
 
+/**
+ * يحوّل أخطاء البنية التحتية الخام إلى رسائل واضحة للمستخدم
+ */
+function humanizeTerminalError(error) {
+  const msg = String(error?.message || error || '');
+
+  if (msg.includes('403') || msg.toLowerCase().includes('forbidden')) {
+    return [
+      '⛔ Terminal execution blocked by runtime policy.',
+      '',
+      'Possible causes:',
+      '  • Terminal capability not granted for your session',
+      '  • Security policy denied execution',
+      '  • PTY session expired — try closing and reopening the terminal',
+      '',
+      'If this persists: restart the server (npm run dev)',
+    ].join('\n');
+  }
+
+  if (msg.includes('401') || msg.toLowerCase().includes('unauthorized')) {
+    return [
+      '🔐 Authentication required.',
+      '',
+      'The server requires an API token.',
+      'Set OCTOPUS_API_TOKEN in server/.env and restart.',
+    ].join('\n');
+  }
+
+  if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('networkerror') || msg.toLowerCase().includes('econnrefused')) {
+    return [
+      '📡 Cannot reach the Octopus server.',
+      '',
+      'The server at localhost:3001 is not responding.',
+      'Run: npm run dev (or node server/supervisor.js)',
+    ].join('\n');
+  }
+
+  if (msg.toLowerCase().includes('stream timed out') || msg.toLowerCase().includes('timed out')) {
+    return [
+      '⏱️ Command timed out.',
+      '',
+      'The process is still running in the background.',
+      'Long-running commands (installs, builds) may exceed the timeout.',
+    ].join('\n');
+  }
+
+  return msg;
+}
+
 export function useTerminalRunner({ currentDir, fileTree }) {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalHistory, setTerminalHistory] = useState([TERMINAL_READY_ENTRY]);
@@ -61,7 +110,9 @@ export function useTerminalRunner({ currentDir, fileTree }) {
       }
     } catch (e) {
       if (e.name !== 'AbortError') {
-        setTerminalHistory(prev => [...finishTerminalStream(prev), terminalErrorEntry(e.message)]);
+        // ترجمة أخطاء البنية التحتية إلى رسائل بشرية
+        const humanError = humanizeTerminalError(e);
+        setTerminalHistory(prev => [...finishTerminalStream(prev), terminalErrorEntry(humanError)]);
       }
     } finally {
       setTerminalBusy(false);

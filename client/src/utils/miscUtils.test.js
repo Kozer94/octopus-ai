@@ -1,7 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyLegUpdates, finishLeg, resetLegState, startLeg } from './legState.js';
-import { buildOpenFilesContext, getLocalEconomyReply, getPromptEconomyProfile, isComplexOctopusTask, shouldSendProjectContext } from './octopusPromptContext.js';
+import {
+  applyLanguageLockToCommand,
+  buildOpenFilesContext,
+  getLanguageLockReply,
+  getLocalEconomyReply,
+  getPromptEconomyProfile,
+  getProjectCreationAction,
+  isComplexOctopusTask,
+  parseLanguageLockCommand,
+  shouldSendProjectContext,
+} from '../config/octopusPromptContext.js';
+import { cleanChatText } from './diffUtils.js';
+import { AI_MODELS, getModelById } from '../services/ModelRegistry.js';
 import { detectRunCommand } from './projectRunCommand.js';
 import { flattenVisibleFileTree, getVirtualWindow } from './fileTreeView.js';
 import { clampPanelWidth, getViewportBoundedPanelMax } from './panelResize.js';
@@ -54,10 +66,47 @@ test('octopus prompt helpers build bounded context and detect complex tasks', ()
   assert.equal(shouldSendProjectContext('اشرح الملف الحالي'), true);
   assert.match(getLocalEconomyReply('من مطورك؟'), /ئامانج صالحي/);
   assert.match(getLocalEconomyReply('من مطورك؟'), /24-30 مايو 2026/);
+  assert.match(getLocalEconomyReply('سلاو'), /دەتوانم/);
+  assert.match(getLocalEconomyReply('من دةمةويت بزانم جون دةتوانيت يارمةتيم بدةى ؟'), /یارمەتیت/);
+  assert.match(getLocalEconomyReply('كيف تقدر تساعدني؟'), /أقدر أساعدك/);
+  assert.match(getLocalEconomyReply('هل تقدر تحكيني عن مواصفاتك ؟'), /مواصفاتي باختصار/);
+  assert.match(getLocalEconomyReply('how can you help me'), /engineering partner/i);
   assert.equal(getPromptEconomyProfile('').id, 'empty');
   assert.equal(getPromptEconomyProfile('من مطورك؟').id, 'local');
+  assert.equal(getPromptEconomyProfile('كيف تقدر تساعدني؟').id, 'local');
+  assert.equal(getPromptEconomyProfile('هل تقدر تحكيني عن مواصفاتك ؟').id, 'local');
   assert.equal(getPromptEconomyProfile('هل تعرف Flutter؟').id, 'light');
   assert.equal(getPromptEconomyProfile('اشرح الملف الحالي').id, 'project');
+  assert.equal(cleanChatText('assistant: سلام! كيف يمكنني مساعدتك؟'), 'سلام! كيف يمكنني مساعدتك؟');
+});
+
+test('project creation requests map to deterministic terminal commands', () => {
+  const laravel = getProjectCreationAction('قم ب انشاء مشروع لارافيل داخل مجلد هذا');
+  assert.equal(laravel.command, 'composer create-project laravel/laravel .');
+  assert.match(laravel.reply, /<terminal>composer create-project laravel\/laravel \.<\/terminal>/);
+
+  assert.equal(getProjectCreationAction('create react project here').command, 'npx create-react-app .');
+  assert.equal(getProjectCreationAction('create nextjs project here').command, 'npx create-next-app .');
+  assert.equal(getProjectCreationAction('create flutter project').command, 'flutter create project_name');
+});
+
+test('client model registry lists selectable AI models', () => {
+  assert.equal(AI_MODELS.some(model => model.provider === 'Groq'), true);
+  assert.equal(AI_MODELS.some(model => model.provider === 'Gemini'), true);
+  assert.equal(AI_MODELS.some(model => model.provider === 'OpenRouter'), true);
+  assert.equal(AI_MODELS.some(model => model.provider === 'Mistral'), true);
+  assert.equal(AI_MODELS.some(model => model.provider === 'Ollama'), true);
+  assert.equal(getModelById('gemini-2.0-flash').provider, 'Gemini');
+});
+
+test('language lock commands pin chat language', () => {
+  assert.deepEqual(parseLanguageLockCommand('/lang ar'), { action: 'set', language: 'ar' });
+  assert.deepEqual(parseLanguageLockCommand('ثبت اللغة العربية'), { action: 'set', language: 'ar' });
+  assert.deepEqual(parseLanguageLockCommand('ثبت اللغة الكردية'), { action: 'set', language: 'ku' });
+  assert.deepEqual(parseLanguageLockCommand('/lang off'), { action: 'clear', language: '' });
+  assert.match(getLanguageLockReply({ action: 'set', language: 'ar' }), /تم تثبيت اللغة/);
+  assert.match(getLocalEconomyReply('hello', { languageLock: 'ar' }), /أهلاً/);
+  assert.match(applyLanguageLockToCommand('هل تعرف Flutter؟', 'ar'), /Reply ONLY in Arabic/);
 });
 
 test('leg state helpers update a single leg', () => {

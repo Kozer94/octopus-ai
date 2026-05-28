@@ -1,5 +1,4 @@
 import { BACKEND } from '../config/uiConfig.js';
-import { getDynamicToken } from './securityBootstrap.js';
 
 const MAX_BREADCRUMBS = 40;
 const MAX_QUEUE = 120;

@@ -19,6 +19,17 @@ function safeRead(fullPath) {
   try {
     const stat = fs.statSync(fullPath);
     if (!stat.isFile() || stat.size > MAX_FILE_SIZE) return null;
+    
+    // Security: Never read .env files or secrets
+    const filename = path.basename(fullPath).toLowerCase();
+    if (filename === '.env' || filename.startsWith('.env.') || 
+        filename === '.env.local' || filename === '.env.production' ||
+        filename === '.env.development' || filename === '.env.test' ||
+        filename === 'secrets.json' || filename === 'credentials.json' ||
+        (filename === 'config.json' && fullPath.includes('secrets'))) {
+      return null;
+    }
+    
     return fs.readFileSync(fullPath, 'utf8');
   } catch { return null; }
 }

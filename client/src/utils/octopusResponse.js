@@ -29,3 +29,28 @@ export function getSavedFileReadPath(file) {
 export function getSavedFileDisplayName(file, readPath) {
   return file.name || readPath.split('/').pop().split('\\').pop();
 }
+
+// Streaming response utilities for Bolt.new/Replit-style live parsing
+export function extractFileFromChunk(chunk) {
+  const fileMatch = chunk.match(/<file\s+path="([^"]*)">/);
+  if (fileMatch) {
+    return { path: fileMatch[1], inProgress: true };
+  }
+  return null;
+}
+
+export function extractTerminalFromChunk(chunk) {
+  const terminalMatch = chunk.match(/<terminal>/);
+  if (terminalMatch) {
+    return { inProgress: true };
+  }
+  return null;
+}
+
+export function isFileComplete(chunk) {
+  return chunk.includes('</file>');
+}
+
+export function isTerminalComplete(chunk) {
+  return chunk.includes('</terminal>');
+}

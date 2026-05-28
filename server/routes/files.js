@@ -2,6 +2,7 @@ const path = require('path');
 const {
   deleteProjectFileAsync,
   listProjectFilesAsync,
+  mkdirProjectAsync,
   readProjectFileAsync,
   renameProjectFileAsync,
   writeProjectFileAsync,
@@ -152,6 +153,25 @@ function registerFileRoutes(app, { ensureProjectMap, appendTodoUpdate, eventBus 
         oldPath,
         newPath,
       }, { category: 'file', source: 'fileService' });
+      try { ensureProjectMap(projectRoot, { force: true }); } catch { }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(error.statusCode || 500).json({ success: false, error: error.message });
+    }
+  });
+  app.post('/api/files/mkdir', async (req, res) => {
+    if (req.securityKernel && typeof req.securityKernel.authorize === 'function') {
+      const auth = req.securityKernel.authorize(req, { capability: CAPABILITIES.FILE_WRITE, resource: req.body?.dirPath });
+      if (!auth || auth.allowed !== true) return res.status(403).json({ success: false, error: auth?.reason || 'Forbidden', code: 'FORBIDDEN_BY_POLICY' });
+    }
+    try {
+      const body = readObject(req.body, 'body');
+      const dirPath = readString(body.dirPath, 'dirPath', { required: true, max: 1000 });
+      const projectDir = readString(body.projectDir, 'projectDir', { max: 1000 });
+      const clientProjectName = readString(body.clientProjectName, 'clientProjectName', { max: 200 });
+
+      const { projectRoot } = await mkdirProjectAsync({ projectDir, clientProjectName, dirPath });
+      eventBus.publish('file.mkdir', { dirPath }, { category: 'file', source: 'fileService' });
       try { ensureProjectMap(projectRoot, { force: true }); } catch { }
       res.json({ success: true });
     } catch (error) {

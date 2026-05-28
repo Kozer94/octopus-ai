@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { octopusApi } from '../services/apiClient';
+import { sendToAI } from '../services/AIService';
 import { openOctopusSavedFiles } from '../services/octopusSavedFiles';
 import {
   OCTOPUS_BUSY_MESSAGE,
@@ -16,7 +17,17 @@ import {
   userMessage,
 } from '../utils/chatMessages';
 import { extractCode } from '../utils/diffUtils';
-import { buildOpenFilesContext, getLocalEconomyReply, isComplexOctopusTask, shouldSendProjectContext } from '../utils/octopusPromptContext';
+import {
+  LANGUAGE_LOCK_STORAGE_KEY,
+  applyLanguageLockToCommand,
+  buildOpenFilesContext,
+  getLanguageLockReply,
+  getLocalEconomyReply,
+  getProjectCreationAction,
+  isComplexOctopusTask,
+  parseLanguageLockCommand,
+  shouldSendProjectContext,
+} from '../config/octopusPromptContext';
 import { getTerminalCommandsFromResponse } from '../utils/octopusResponse';
 import { applyLegUpdates } from '../utils/legState';
 import { getOpenFileId, isOpenFileActive } from '../utils/openFileIdentity';
@@ -31,6 +42,23 @@ function upsertActiveFileContent(files, activeFile, content) {
       ? { ...file, content }
       : file
   );
+}
+
+function readLanguageLock() {
+  try {
+    return globalThis.localStorage?.getItem(LANGUAGE_LOCK_STORAGE_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeLanguageLock(language = '') {
+  try {
+    if (language) globalThis.localStorage?.setItem(LANGUAGE_LOCK_STORAGE_KEY, language);
+    else globalThis.localStorage?.removeItem(LANGUAGE_LOCK_STORAGE_KEY);
+  } catch {
+    // localStorage may be unavailable; keep the in-memory lock.
+  }
 }
 
 export function useOctopusWorkflow({
@@ -65,6 +93,7 @@ export function useOctopusWorkflow({
   const legUpdateFrameRef = useRef(null);
   const streamingMessageRef = useRef(null);
   const streamChunkRef = useRef(null);
+  const languageLockRef = useRef(readLanguageLock());
 
   function scheduleLegUpdateFlush() {
     if (legUpdateFrameRef.current) return;
@@ -153,7 +182,7 @@ export function useOctopusWorkflow({
     });
   }
 
-  async function send(commandOverride) {
+  async function send(commandOverride, modelOverride = '') {
     const text = (commandOverride ?? input).trim();
     if (!text || loading) return;
     if (awaitingConfirm) {
@@ -161,7 +190,24 @@ export function useOctopusWorkflow({
       return;
     }
 
-    const localReply = getLocalEconomyReply(text);
+    const languageCommand = parseLanguageLockCommand(text);
+    if (languageCommand) {
+      languageLockRef.current = languageCommand.action === 'set' ? languageCommand.language : '';
+      writeLanguageLock(languageLockRef.current);
+      setInput('');
+      setMessages(prev => [...prev, userMessage(text), octopusMessage(getLanguageLockReply(languageCommand))]);
+      return;
+    }
+
+    const projectCreation = getProjectCreationAction(text, { languageLock: languageLockRef.current });
+    if (projectCreation) {
+      setInput('');
+      setMessages(prev => [...prev, userMessage(text), octopusMessage(projectCreation.reply)]);
+      queueTerminalCommand(projectCreation.command);
+      return;
+    }
+
+    const localReply = getLocalEconomyReply(text, { languageLock: languageLockRef.current });
     if (localReply) {
       setInput('');
       setMessages(prev => [...prev, userMessage(text), octopusMessage(localReply)]);
@@ -177,14 +223,14 @@ export function useOctopusWorkflow({
     const includeProjectContext = shouldSendProjectContext(text);
     const openFilesContext = includeProjectContext ? buildOpenFilesContext(files) : '';
     const isComplexTask = isComplexOctopusTask(text);
+    const outboundText = applyLanguageLockToCommand(text, languageLockRef.current);
 
     if (!isComplexTask) {
       activateLeg(1, 'Analyzing request...');
       const currentFile = files.find(file => isOpenFileActive(file, activeFile));
 
       try {
-        const data = await octopusApi.send({
-          command: text,
+        const data = await sendToAI(modelOverride || '', [{ role: 'user', content: outboundText }], '', {
           sessionId,
           activeFile: includeProjectContext ? activeFile : '',
           activeFileContent: includeProjectContext ? currentFile?.content || '' : '',
@@ -223,14 +269,14 @@ export function useOctopusWorkflow({
     }, 30_000);
 
     try {
-      const data = await octopusApi.preview({ command: text, projectDir });
+      const data = await octopusApi.preview({ command: outboundText, projectDir, model: modelOverride || '' });
       clearTimeout(slowTimer);
       completeLeg(1);
       completeLeg(2);
 
       if (data.success) {
         setMessages(prev => [...prev, octopusMessage(data.preview)]);
-        setPendingPlan({ plan: data.plan, command: text, openFilesContext });
+        setPendingPlan({ plan: data.plan, command: outboundText, openFilesContext, model: modelOverride || '' });
         setAwaitingConfirm(true);
       } else {
         reportWorkflowError(data.error || 'Project scan failed', 'Preview planning returned an error response.');
@@ -258,7 +304,7 @@ export function useOctopusWorkflow({
   async function executeApprovedPlan() {
     if (!pendingPlan) return;
 
-    const { command, plan, openFilesContext } = pendingPlan;
+    const { command, plan, openFilesContext, model = '' } = pendingPlan;
     setAwaitingConfirm(false);
     setPendingPlan(null);
     setLoading(true);
@@ -268,7 +314,7 @@ export function useOctopusWorkflow({
     const currentFile = files.find(file => isOpenFileActive(file, activeFile));
 
     if (plan && Array.isArray(plan.tasks)) {
-      plan.tasks.forEach(task => activateLeg(task.leg, task.task));
+      plan.tasks.filter(task => task.active !== false).forEach(task => activateLeg(task.leg, task.task));
     } else {
       activateLeg(1, 'Writing code...');
       activateLeg(2, 'Reviewing...');
@@ -291,6 +337,7 @@ export function useOctopusWorkflow({
         projectDir,
         confirmed: true,
         plan,
+        model,
       }, {
         onMessage: (entry, eventName) => {
           if (eventName === 'leg_update' && entry?.legId) {

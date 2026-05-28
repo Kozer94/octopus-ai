@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { getProjectSnapshot, getTaskContext } = require('./truthLayer');
 const { extractAndWrite, extractTerminalCommands } = require('./validatorLayer');
+const { detectRequestLanguage, buildLanguageHint } = require('./services/octopusConfig');
 
 // ─── أوضاع التشغيل ───────────────────────────────────────────
 const MODES = {
@@ -299,7 +300,9 @@ async function runBrainController({
   activeFile = '',
   activeFileContent = '',
   callAI,
-  onUpdate,        // callback(legId, status, data)
+  modelOverride = '',
+  onUpdate,
+  plan: prebuiltPlan = null,
 }) {
   const timeline = [];
   const tick = (legId, status, data = {}) => {
@@ -315,43 +318,55 @@ async function runBrainController({
   const mode        = detectMode(command);
   const baseContext = getTaskContext(projectDir, command, activeFile, activeFileContent);
 
+  // Detect language and build hint for dynamic injection
+  const lang = detectRequestLanguage(command);
+  const langHint = buildLanguageHint(lang);
+
   tick(0, 'snapshot_ready', { frameworks: snapshot.frameworks, mode });
 
-  // ② المهندس 1 و2 بالتوازي — مع حماية من فشل provider واحد
-  tick(1, 'thinking');
-  tick(2, 'thinking');
-
-  const [eng1Result, eng2Result] = await Promise.all([
-    callAI([
-      { role: 'system', content: buildEngineer1Prompt(activeFile) },
-      { role: 'user',   content: `${snapshot.summary}\n\n${baseContext}\n\nطلب المستخدم: ${command}` },
-    ], 1500).then(r => { tick(1, 'ideas_ready'); return r; })
-      .catch(e => { tick(1, 'error', { error: e.message }); return `المهندس 1 غير متاح: ${e.message}`; }),
-
-    callAI([
-      { role: 'system', content: buildEngineer2Prompt() },
-      { role: 'user',   content: `${snapshot.summary}\n\nطلب المستخدم: ${command}` },
-    ], 1500).then(r => { tick(2, 'ideas_ready'); return r; })
-      .catch(e => { tick(2, 'error', { error: e.message }); return `المهندس 2 غير متاح: ${e.message}`; }),
-  ]);
-
-  // ③ العقل المدبر يقرر
-  tick(0, 'brain_deciding');
-  const brainRaw = await callAI([{
-    role: 'user',
-    content: buildBrainPrompt(command, eng1Result, eng2Result, snapshot, activeFile),
-  }], 2000);
-
   let plan;
-  try {
-    const jsonBlock = brainRaw.match(/```json\s*([\s\S]*?)\s*```/);
-    plan = JSON.parse(jsonBlock?.[1] || brainRaw);
-  } catch {
-    plan = { mode, decision: command, rejected: '', tasks: buildDefaultTasks(command) };
-  }
-  plan = normalizePlan(plan, command, mode);
+  let eng1Result = '';
+  let eng2Result = '';
 
-  tick(0, 'plan_ready', { plan });
+  // ② إذا وُجد plan جاهز من مرحلة preview، تخطَّ مرحلة التخطيط كلياً
+  if (prebuiltPlan && Array.isArray(prebuiltPlan.tasks) && prebuiltPlan.tasks.length > 0) {
+    plan = normalizePlan(prebuiltPlan, command, mode);
+    tick(0, 'plan_provided', { plan });
+  } else {
+    // المهندس 1 و2 بالتوازي — مع حماية من فشل provider واحد
+    tick(0, 'eng1_thinking');
+    tick(0, 'eng2_thinking');
+
+    [eng1Result, eng2Result] = await Promise.all([
+      callAI([
+        { role: 'system', content: buildEngineer1Prompt(activeFile) },
+        { role: 'user',   content: `${snapshot.summary}\n\n${baseContext}\n\nطلب المستخدم: ${command}${langHint ? `\n\n${langHint}` : ''}` },
+      ], 1500, command, modelOverride).then(r => { tick(0, 'eng1_ready'); return r; })
+        .catch(e => { tick(0, 'eng1_error', { error: e.message }); return `المهندس 1 غير متاح: ${e.message}`; }),
+
+      callAI([
+        { role: 'system', content: buildEngineer2Prompt() },
+        { role: 'user',   content: `${snapshot.summary}\n\nطلب المستخدم: ${command}${langHint ? `\n\n${langHint}` : ''}` },
+      ], 1500, command, modelOverride).then(r => { tick(0, 'eng2_ready'); return r; })
+        .catch(e => { tick(0, 'eng2_error', { error: e.message }); return `المهندس 2 غير متاح: ${e.message}`; }),
+    ]);
+
+    // العقل المدبر يقرر
+    tick(0, 'brain_deciding');
+    const brainRaw = await callAI([{
+      role: 'user',
+      content: buildBrainPrompt(command, eng1Result, eng2Result, snapshot, activeFile) + (langHint ? `\n\n${langHint}` : ''),
+    }], 2000, command, modelOverride);
+
+    try {
+      const jsonBlock = brainRaw.match(/```json\s*([\s\S]*?)\s*```/);
+      plan = JSON.parse(jsonBlock?.[1] || brainRaw);
+    } catch {
+      plan = { mode, decision: command, rejected: '', tasks: buildDefaultTasks(command) };
+    }
+    plan = normalizePlan(plan, command, mode);
+    tick(0, 'plan_ready', { plan });
+  }
 
   // ④ تنفيذ الأرجل مع dependency graph حقيقي
   // تصفية الأرجل حسب نوع الطلب لتقليل الحمل على AI providers
@@ -416,7 +431,7 @@ async function runBrainController({
       // رجل الدمج
       if (task.leg === 8) {
         const mergeCtx = buildMergeContext(legResults, command, mode);
-        const result   = await callAI([{ role: 'user', content: mergeCtx }]);
+        const result   = await callAI([{ role: 'user', content: mergeCtx + (langHint ? `\n\n${langHint}` : '') }], 8192, command, modelOverride);
         legStatus[task.leg] = 'done';
         tick(task.leg, 'done', { result: result.slice(0, 200) });
         legResults.push({ legId: task.leg, result });
@@ -442,8 +457,8 @@ async function runBrainController({
       const { system, user } = buildLegExecutionPrompt(task, legDef, mode, contextForLeg, activeFile);
       const result = await callAI([
         { role: 'system', content: system },
-        { role: 'user',   content: user },
-      ]);
+        { role: 'user',   content: user + (langHint ? `\n\n${langHint}` : '') },
+      ], 8192, command, modelOverride);
 
       legStatus[task.leg] = 'done';
       tick(task.leg, 'done', { result: result.slice(0, 200) });
@@ -502,7 +517,7 @@ async function runBrainController({
 }
 
 // ─── preview بدون تنفيذ ───────────────────────────────────────
-async function previewBrainController({ command, projectDir, activeFile = '', activeFileContent = '', callAI }) {
+async function previewBrainController({ command, projectDir, activeFile = '', activeFileContent = '', callAI, modelOverride = '' }) {
   const snapshot = getProjectSnapshot(projectDir);
   const mode     = detectMode(command);
 
@@ -510,17 +525,17 @@ async function previewBrainController({ command, projectDir, activeFile = '', ac
     callAI([
       { role: 'system', content: buildEngineer1Prompt() },
       { role: 'user',   content: `${snapshot.summary}\nطلب المستخدم: ${command}` },
-    ]),
+    ], 8192, command, modelOverride),
     callAI([
       { role: 'system', content: buildEngineer2Prompt() },
       { role: 'user',   content: `${snapshot.summary}\nطلب المستخدم: ${command}` },
-    ]),
+    ], 8192, command, modelOverride),
   ]);
 
   const brainRaw = await callAI([{
     role: 'user',
     content: buildBrainPrompt(command, eng1, eng2, snapshot, activeFile),
-  }]);
+  }], 8192, command, modelOverride);
 
   let plan;
   try {

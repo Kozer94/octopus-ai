@@ -12,7 +12,7 @@ export function useResizableLayout() {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeActivity, setActiveActivity] = useState('explorer');
-  const [rightPanelTab, setRightPanelTab] = useState('chat');
+  const [rightPanelTab, setRightPanelTab] = useState('legs');
   const [isMobile, setIsMobile] = useState(false);
 
   const getSidebarMaxWidth = useCallback(() => {
@@ -97,7 +97,7 @@ export function useResizableLayout() {
     setRightPanelWidth(260);
     setTerminalHeight(180);
     setActiveActivity('explorer');
-    setRightPanelTab('chat');
+    setRightPanelTab('legs');
   }
 
   return {

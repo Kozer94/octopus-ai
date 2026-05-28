@@ -46,7 +46,6 @@ const exportQueue    = [];          // spans pending flush to server
 const contextStack   = [];          // stack of spanIds — يتتبع الـ "current span"
 
 let flushTimer    = null;
-let _authToken    = '';
 let _initialized  = false;
 let _originalFetch = null;
 let _fetchPatched = false;
@@ -176,13 +175,12 @@ function mergeHeaders(existing, additions) {
  * @param {{ traceId, sessionId, verbose?, authToken? }} options
  * @returns {{ traceId, rootSpanId }}
  */
-export function initCorrelation({ traceId, sessionId, verbose = false, authToken = '', patchFetch = true } = {}) {
+export function initCorrelation({ traceId, sessionId, verbose = false, patchFetch = true } = {}) {
   if (_initialized) return { traceId: _traceId, rootSpanId: _rootSpanId };
 
   _traceId   = traceId   || generateTraceHex();
   _sessionId = sessionId || '';
   _verbose   = verbose;
-  _authToken = authToken;
   _rootSpanId = generateId('root');
   _initialized = true;
 

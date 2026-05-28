@@ -15,6 +15,7 @@ export function createSessionId({ storage = globalThis.sessionStorage, now = Dat
 
 export const THEMES = {
   dark:      { name: 'Dark',      bg: '#0d1117', sidebar: '#161b22', border: '#30363d', text: '#e6edf3', textMuted: '#9aa4ad', accent: '#58a6ff', activityBar: '#161b22', statusBar: '#1f6feb', editorTheme: 'vs-dark' },
+  glass:     { name: 'Glass',     bg: '#0e0621', sidebar: 'rgba(255,255,255,0.038)', border: 'rgba(255,255,255,0.105)', text: '#ede8ff', textMuted: 'rgba(170,155,215,0.72)', accent: '#a78bfa', activityBar: 'rgba(255,255,255,0.025)', statusBar: 'rgba(72,32,168,0.85)', editorTheme: 'vs-dark' },
   dracula:   { name: 'Dracula',   bg: '#282a36', sidebar: '#21222c', border: '#44475a', text: '#f8f8f2', textMuted: '#b6b9df', accent: '#bd93f9', activityBar: '#191a21', statusBar: '#6272a4', editorTheme: 'vs-dark' },
   monokai:   { name: 'Monokai',   bg: '#272822', sidebar: '#1e1f1c', border: '#3e3d32', text: '#f8f8f2', textMuted: '#b9b58d', accent: '#a6e22e', activityBar: '#1a1b18', statusBar: '#75715e', editorTheme: 'vs-dark' },
   nord:      { name: 'Nord',      bg: '#2e3440', sidebar: '#252931', border: '#3b4252', text: '#eceff4', textMuted: '#8f9bad', accent: '#88c0d0', activityBar: '#21262d', statusBar: '#5e81ac', editorTheme: 'vs-dark' },
@@ -49,4 +50,5 @@ export const ACTIVITY_ITEMS = [
   { id: 'search',     icon: 'codicon-search',          title: 'Search' },
   { id: 'git',        icon: 'codicon-source-control',  title: 'Git' },
   { id: 'extensions', icon: 'codicon-extensions',      title: 'Extensions' },
+  { id: 'workspace',  icon: 'codicon-rocket',          title: 'Workspace Launcher' },
 ];

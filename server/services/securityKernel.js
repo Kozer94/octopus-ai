@@ -107,6 +107,7 @@ const ROLES = Object.freeze({
       CAPABILITIES.AI_PREVIEW,
       CAPABILITIES.FILE_READ,
       CAPABILITIES.FILE_WRITE,
+      CAPABILITIES.FILE_DELETE,
       CAPABILITIES.FILE_SCAN,
       CAPABILITIES.PACKAGE_INSTALL,
       CAPABILITIES.PACKAGE_UNINSTALL,
@@ -117,6 +118,7 @@ const ROLES = Object.freeze({
       CAPABILITIES.WORKSPACE_READ,
       CAPABILITIES.WORKSPACE_WRITE,
       CAPABILITIES.SYSTEM_READ,
+      CAPABILITIES.SYSTEM_RUNTIME,
     ]),
   },
   viewer: {
@@ -346,6 +348,75 @@ class SecurityKernel {
       result: 'allowed',
     });
     return { allowed: true, identity };
+  }
+
+  // ─── Runtime Permission Inspector ───
+
+  /**
+   * يُرجع صورة كاملة عن هوية الطلب وصلاحياته — للـ diagnostics فقط
+   */
+  inspect(req) {
+    const identity = this.resolveIdentity(req);
+    const allCaps = Object.values(CAPABILITIES);
+    const roleCapabilities = identity.capabilities || ROLES[identity.role]?.capabilities || new Set();
+
+    const granted = allCaps.filter(c => roleCapabilities.has(c));
+    const denied  = allCaps.filter(c => !roleCapabilities.has(c));
+
+    const groupByCat = (caps) => caps.reduce((acc, cap) => {
+      const [cat] = cap.split(':');
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(cap);
+      return acc;
+    }, {});
+
+    return {
+      identity: { type: identity.type, name: identity.name, role: identity.role },
+      capabilities: {
+        granted,
+        denied,
+        grantedByCategory: groupByCat(granted),
+        deniedByCategory:  groupByCat(denied),
+        count: { granted: granted.length, denied: denied.length, total: allCaps.length },
+      },
+      policies: this._policies.map(p => ({ name: p.name, priority: p.priority, effect: p.effect })),
+      nodeEnv: process.env.NODE_ENV || 'development',
+    };
+  }
+
+  /**
+   * يُرجع سبب رفض صلاحية محددة — للـ debugging
+   * لا يُسجَّل في الـ audit log
+   */
+  whyDenied(req, capability) {
+    const identity = this.resolveIdentity(req);
+    const reasons = [];
+
+    for (const policy of this._policies) {
+      try {
+        if (policy.condition({ identity, capability, resource: null, req })) {
+          if (policy.effect === 'deny') {
+            reasons.push({ layer: 'policy', rule: policy.name, priority: policy.priority });
+          }
+        }
+      } catch { /* ignore evaluation errors in diagnostic mode */ }
+    }
+
+    const roleCapabilities = identity.capabilities || ROLES[identity.role]?.capabilities || new Set();
+    if (!roleCapabilities.has(capability)) {
+      reasons.push({
+        layer: 'capability',
+        rule: `Role "${identity.role}" lacks "${capability}"`,
+        fix: `Requires role: developer or admin`,
+      });
+    }
+
+    return {
+      capability,
+      identity: { type: identity.type, name: identity.name, role: identity.role },
+      allowed: reasons.length === 0 && roleCapabilities.has(capability),
+      reasons,
+    };
   }
 
   // ─── حماية الموارد ───

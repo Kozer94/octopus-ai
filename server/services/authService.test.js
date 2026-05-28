@@ -83,25 +83,31 @@ test('auth middleware rejects missing token when configured', () => {
   assert.deepEqual(res.body, { success: false, error: 'Unauthorized' });
 });
 
-test('auth middleware allows local development only when explicitly configured', () => {
+test('auth middleware allows local development and marks local dev auth', () => {
   const auth = createAuthMiddleware({
-    env: { OCTOPUS_ALLOW_LOCAL_NO_AUTH: '1' },
+    env: {},
     nodeEnv: 'development',
   });
+  const req = makeReq({ ip: '127.0.0.1' });
   const res = makeRes();
   let called = false;
-  auth(makeReq({ ip: '127.0.0.1' }), res, () => { called = true; });
+  auth(req, res, () => { called = true; });
   assert.equal(called, true);
-  assert.equal(res.headers['X-Octopus-Auth'], 'local-dev');
+  assert.equal(req._localDevAuth, true);
+  assert.equal(res.headers['X-Octopus-Auth'], undefined);
 });
 
-test('auth middleware rejects local development without token by default', () => {
-  const auth = createAuthMiddleware({ env: {}, nodeEnv: 'development' });
+test('auth middleware allows explicit local bypass in production', () => {
+  const auth = createAuthMiddleware({
+    env: { OCTOPUS_ALLOW_LOCAL_NO_AUTH: '1' },
+    nodeEnv: 'production',
+  });
+  const req = makeReq({ ip: '127.0.0.1' });
   const res = makeRes();
   let called = false;
-  auth(makeReq({ ip: '127.0.0.1' }), res, () => { called = true; });
-  assert.equal(called, false);
-  assert.equal(res.statusCode, 401);
+  auth(req, res, () => { called = true; });
+  assert.equal(called, true);
+  assert.equal(req._localDevAuth, true);
 });
 
 test('auth middleware rejects production without configured token', () => {

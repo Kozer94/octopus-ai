@@ -15,6 +15,17 @@ export function finishLeg(legs, id) {
 export function applyLegUpdate(leg, update) {
   if (!update || leg.id !== update.legId) return leg;
 
+  if (update.status === 'waiting') {
+    const waitingFor = Array.isArray(update.waitingFor) ? update.waitingFor : [];
+    const nextLeg = {
+      ...leg,
+      status: 'waiting',
+      task: waitingFor.length ? `Waiting for leg ${waitingFor.join(', ')}...` : 'Waiting for dependencies...',
+      progress: Math.max(leg.progress || 0, 1),
+    };
+    return isSameLegState(leg, nextLeg) ? leg : nextLeg;
+  }
+
   if (update.status === 'working') {
     const nextLeg = {
       ...leg,
